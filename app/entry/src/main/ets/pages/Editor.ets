@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.5';
 
 interface AssEvent {
   kind: string;
@@ -891,6 +891,27 @@ struct Editor {
       }
     }
     this.status = '当前播放位置没有 Dialogue 行';
+  }
+
+  private backToVideo(): void {
+    if (this.videoUri === '') {
+      return;
+    }
+    this.showVideo = true;
+    this.showStyles = false;
+    this.showAudio = false;
+    if (this.selected >= 0 && this.selected < this.events.length) {
+      const e = this.events[this.selected];
+      this.currentMs = e.startMs;
+      this.updateActiveText();
+      try {
+        this.videoController.setCurrentTime(e.startMs / 1000);
+      } catch (ex) {
+        // player not prepared yet
+      }
+    }
+    this.videoStatus = this.selected >= 0
+      ? `返回视频，定位到 #${this.selected + 1}` : '返回视频';
   }
 
   private seekSelected(): void {
@@ -1898,6 +1919,15 @@ struct Editor {
             .onClick(() => { this.filterText = ''; })
         }
         .width('100%')
+
+        if (this.videoUri !== '') {
+          Row({ space: 6 }) {
+            Button('返回视频').fontSize(10)
+              .onClick(() => { this.backToVideo(); })
+            Text('回到视频并定位到选中行').fontSize(9).fontColor('#999999')
+          }
+          .width('100%')
+        }
 
         List({ space: 3 }) {
           ForEach(this.filteredEvents(), (e: AssEvent) => {
