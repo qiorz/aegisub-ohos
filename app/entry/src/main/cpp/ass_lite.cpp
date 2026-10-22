@@ -24,6 +24,10 @@ struct Event {
     int end_ms = 0;
 };
 
+struct StyleEntry {
+    std::vector<std::string> fields;
+};
+
 struct Doc {
     std::string header;
     std::string footer;
@@ -32,6 +36,11 @@ struct Doc {
     std::vector<std::string> format;
     std::vector<std::string> styles;
     std::vector<Event> events;
+    std::string style_section;
+    std::string style_prefix;
+    std::string style_suffix;
+    std::vector<std::string> style_format;
+    std::vector<StyleEntry> style_entries;
     int start_index = 1;
     int end_index = 2;
     int text_index = 9;
@@ -175,7 +184,22 @@ std::string to_json(const Doc& d) {
     out += std::to_string(d.text_index);
     out += ",\"styles\":";
     json_string_array(out, d.styles);
-    out += ",\"events\":[";
+    out += ",\"styleSection\":\"";
+    out += json_escape(d.style_section);
+    out += "\",\"stylePrefix\":\"";
+    out += json_escape(d.style_prefix);
+    out += "\",\"styleSuffix\":\"";
+    out += json_escape(d.style_suffix);
+    out += "\",\"styleFormat\":";
+    json_string_array(out, d.style_format);
+    out += ",\"styleEntries\":[";
+    for (size_t i = 0; i < d.style_entries.size(); ++i) {
+        if (i) out += ',';
+        out += "{\"fields\":";
+        json_string_array(out, d.style_entries[i].fields);
+        out += '}';
+    }
+    out += "],\"events\":[";
     for (size_t i = 0; i < d.events.size(); ++i) {
         if (i) out += ',';
         const auto& e = d.events[i];
@@ -269,6 +293,68 @@ Doc parse_ass(const std::string& content_in) {
             d.styles.push_back(name);
     }
 
+    // Structured style section: needed by the editor to change font/size/colors
+    // while preserving [Script Info] and whatever follows the style table.
+    const int header_end = events_idx >= 0 ? events_idx : static_cast<int>(lines.size());
+    int style_idx = -1;
+    int style_end = header_end;
+    for (int i = 0; i < header_end; ++i) {
+        if (is_section(lines[static_cast<size_t>(i)], "[v4+ styles]") ||
+            is_section(lines[static_cast<size_t>(i)], "[v4 styles]")) {
+            style_idx = i;
+            break;
+        }
+    }
+    if (style_idx >= 0) {
+        for (int i = style_idx + 1; i < header_end; ++i) {
+            std::string t = trim(lines[static_cast<size_t>(i)]);
+            if (t.size() >= 2 && t.front() == '[' && t.back() == ']') {
+                style_end = i;
+                break;
+            }
+        }
+        d.style_section = trim(lines[static_cast<size_t>(style_idx)]);
+        d.style_prefix = join_lines(lines, 0, static_cast<size_t>(style_idx), d.eol);
+        d.style_suffix = join_lines(lines, static_cast<size_t>(style_end),
+                                    static_cast<size_t>(header_end), d.eol);
+        for (int i = style_idx + 1; i < style_end; ++i) {
+            std::string t = trim(lines[static_cast<size_t>(i)]);
+            if (istarts(t, "Format:")) {
+                d.style_format = split_format(t);
+                break;
+            }
+        }
+        if (d.style_format.empty()) {
+            d.style_format = split_format(std::string("Format: ") +
+                "Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
+        }
+        int style_tail = style_idx + 1;
+        for (int i = style_idx + 1; i < style_end; ++i) {
+            std::string t = trim(lines[static_cast<size_t>(i)]);
+            if (!istarts(t, "Style:"))
+                continue;
+            std::string payload = t.substr(6);
+            if (!payload.empty() && payload.front() == ' ')
+                payload.erase(payload.begin());
+            auto fields = split_fields(payload, ',', d.style_format.size());
+            while (fields.size() < d.style_format.size())
+                fields.emplace_back();
+            d.style_entries.push_back({std::move(fields)});
+            style_tail = i + 1;
+        }
+        if (!d.style_entries.empty()) {
+            d.style_suffix = join_lines(lines, static_cast<size_t>(style_tail),
+                                        static_cast<size_t>(header_end), d.eol);
+            d.styles.clear();
+            int name_idx = index_of(d.style_format, "Name");
+            if (name_idx < 0) name_idx = 0;
+            for (const auto& e : d.style_entries) {
+                if (static_cast<size_t>(name_idx) < e.fields.size())
+                    d.styles.push_back(trim(e.fields[static_cast<size_t>(name_idx)]));
+            }
+        }
+    }
+
     std::vector<std::string> format;
     if (events_idx >= 0) {
         for (int i = events_idx + 1; i < events_end; ++i) {
@@ -338,6 +424,21 @@ std::string NewAssJson() {
         "\n";
     d.format = split_format(std::string("Format: ") + kDefaultFormat);
     d.styles = {"Default"};
+    d.style_section = "[V4+ Styles]";
+    d.style_prefix =
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        "PlayResX: 1920\n"
+        "PlayResY: 1080\n"
+        "WrapStyle: 0\n"
+        "ScaledBorderAndShadow: yes\n"
+        "\n";
+    d.style_suffix = "\n";
+    d.style_format = split_format(std::string("Format: ") +
+        "Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding");
+    d.style_entries.push_back({split_fields(
+        "Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1",
+        ',', d.style_format.size())});
     d.start_index = 1;
     d.end_index = 2;
     d.text_index = 9;

@@ -22,6 +22,10 @@ interface AssEvent {
   endMs: number;
 }
 
+interface AssStyleEntry {
+  fields: string[];
+}
+
 interface AssDoc {
   ok: boolean;
   error?: string;
@@ -35,6 +39,11 @@ interface AssDoc {
   textIndex?: number;
   styles?: string[];
   events?: AssEvent[];
+  styleSection?: string;
+  stylePrefix?: string;
+  styleSuffix?: string;
+  styleFormat?: string[];
+  styleEntries?: AssStyleEntry[];
 }
 
 function stamp(): string {
@@ -62,6 +71,17 @@ struct Editor {
   @State editEnd: string = '';
   @State editStyle: string = '';
   @State editText: string = '';
+  @State showStyles: boolean = false;
+  @State styleSection: string = '';
+  @State stylePrefix: string = '';
+  @State styleSuffix: string = '';
+  @State styleFormat: string[] = [];
+  @State styleEntries: AssStyleEntry[] = [];
+  @State styleSelected: number = -1;
+  @State editFont: string = '';
+  @State editSize: string = '';
+  @State editPrimary: string = '';
+  @State editOutline: string = '';
 
   private header: string = '';
   private footer: string = '';
@@ -78,6 +98,82 @@ struct Editor {
     return this.format.findIndex((v: string) => v.toLowerCase() === 'style');
   }
 
+  private styleField(name: string): number {
+    const target = name.toLowerCase();
+    return this.styleFormat.findIndex((v: string) => v.toLowerCase() === target);
+  }
+
+  private styleName(s: AssStyleEntry): string {
+    const i = this.styleField('Name');
+    return i >= 0 ? (s.fields[i] ?? '') : '';
+  }
+
+  private selectStyle(i: number): void {
+    if (i < 0 || i >= this.styleEntries.length) {
+      return;
+    }
+    this.styleSelected = i;
+    const f: string[] = this.styleEntries[i].fields;
+    this.editFont = this.styleField('Fontname') >= 0
+      ? (f[this.styleField('Fontname')] ?? '') : '';
+    this.editSize = this.styleField('Fontsize') >= 0
+      ? (f[this.styleField('Fontsize')] ?? '') : '';
+    this.editPrimary = this.styleField('PrimaryColour') >= 0
+      ? (f[this.styleField('PrimaryColour')] ?? '') : '';
+    this.editOutline = this.styleField('OutlineColour') >= 0
+      ? (f[this.styleField('OutlineColour')] ?? '') : '';
+  }
+
+  private applyStyle(): void {
+    if (this.styleSelected < 0 || this.styleSelected >= this.styleEntries.length) {
+      return;
+    }
+    const f: string[] = this.styleEntries[this.styleSelected].fields.slice();
+    const set = (name: string, value: string): void => {
+      const i = this.styleField(name);
+      if (i >= 0 && i < f.length) {
+        f[i] = value;
+      }
+    };
+    set('Fontname', this.editFont.trim());
+    set('Fontsize', this.editSize.trim());
+    set('PrimaryColour', this.editPrimary.trim());
+    set('OutlineColour', this.editOutline.trim());
+    const arr: AssStyleEntry[] = this.styleEntries.slice();
+    arr[this.styleSelected] = { fields: f };
+    this.styleEntries = arr;
+    const names: string[] = [];
+    for (const e of arr) {
+      names.push(this.styleName(e));
+    }
+    this.styles = names;
+    this.status = '样式已应用（未保存）';
+  }
+
+  private toggleStyles(): void {
+    this.showStyles = !this.showStyles;
+    if (this.showStyles && this.styleEntries.length > 0 && this.styleSelected < 0) {
+      this.selectStyle(0);
+    }
+  }
+
+  private buildHeader(): string {
+    if (this.styleEntries.length > 0 && this.styleSection !== '') {
+      let h = this.stylePrefix;
+      if (h.length > 0 && !h.endsWith(this.eol)) {
+        h += this.eol;
+      }
+      h += this.styleSection + this.eol;
+      h += 'Format: ' + this.styleFormat.join(', ') + this.eol;
+      for (let i = 0; i < this.styleEntries.length; i++) {
+        h += 'Style: ' + this.styleEntries[i].fields.join(',') + this.eol;
+      }
+      h += this.styleSuffix;
+      return h;
+    }
+    return this.header;
+  }
+
   private applyDoc(d: AssDoc): void {
     this.header = d.header ?? '';
     this.footer = d.footer ?? '';
@@ -89,9 +185,18 @@ struct Editor {
     this.startIndex = d.startIndex ?? 1;
     this.endIndex = d.endIndex ?? 2;
     this.textIndex = d.textIndex ?? 9;
+    this.styleSection = d.styleSection ?? '';
+    this.stylePrefix = d.stylePrefix ?? '';
+    this.styleSuffix = d.styleSuffix ?? '';
+    this.styleFormat = d.styleFormat ?? [];
+    this.styleEntries = d.styleEntries ?? [];
+    this.styleSelected = this.styleEntries.length > 0 ? 0 : -1;
     this.hasDoc = true;
     this.selected = this.events.length > 0 ? 0 : -1;
     this.loadSelected();
+    if (this.styleSelected >= 0) {
+      this.selectStyle(this.styleSelected);
+    }
   }
 
   private loadSelected(): void {
@@ -210,7 +315,7 @@ struct Editor {
   }
 
   private serialize(): string {
-    let out = this.header;
+    let out = this.buildHeader();
     if (out.length > 0 && !out.endsWith(this.eol)) {
       out += this.eol;
     }
@@ -242,7 +347,11 @@ struct Editor {
       this.status = '没有可保存的文件路径';
       return false;
     }
-    if (this.selected >= 0 && this.selected < this.events.length) {
+    if (this.showStyles) {
+      if (this.styleSelected >= 0 && this.styleSelected < this.styleEntries.length) {
+        this.applyStyle();
+      }
+    } else if (this.selected >= 0 && this.selected < this.events.length) {
       this.applyEdit();
     }
     try {
@@ -377,6 +486,9 @@ struct Editor {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
+        Button(this.showStyles ? '台词' : '样式')
+          .enabled(this.hasDoc)
+          .onClick(() => { this.toggleStyles(); })
         Button('测试')
           .onClick(() => { router.pushUrl({ url: 'pages/Index' }); })
       }
@@ -399,7 +511,69 @@ struct Editor {
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      if (this.hasDoc) {
+      if (this.hasDoc && this.showStyles) {
+        Column({ space: 6 }) {
+          Text('样式').fontSize(16).fontWeight(FontWeight.Bold).width('100%')
+          if (this.styleEntries.length === 0) {
+            Text('该文件没有样式段').fontSize(12).fontColor('#888888')
+          } else {
+            List({ space: 3 }) {
+              ForEach(this.styleEntries, (st: AssStyleEntry, i: number) => {
+                ListItem() {
+                  Text(this.styleName(st))
+                    .fontSize(13)
+                    .width('100%')
+                    .padding(8)
+                    .backgroundColor(this.styleSelected === i ? '#E7F0FF' : '#FFFFFF')
+                    .borderRadius(6)
+                }
+                .onClick(() => { this.selectStyle(i); })
+              }, (st: AssStyleEntry, i: number) => `${i}`)
+            }
+            .layoutWeight(1)
+            .width('100%')
+            .divider({ strokeWidth: 1, color: '#E5E5E5' })
+
+            Column({ space: 6 }) {
+              Row({ space: 5 }) {
+                Text('字体').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editFont })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editFont = v; })
+              }
+              .width('100%')
+
+              Row({ space: 5 }) {
+                Text('字号').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editSize })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editSize = v; })
+                Text('主色').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editPrimary })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editPrimary = v; })
+              }
+              .width('100%')
+
+              Row({ space: 5 }) {
+                Text('描边').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editOutline })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editOutline = v; })
+                Button('应用样式').fontSize(11)
+                  .onClick(() => { this.applyStyle(); })
+              }
+              .width('100%')
+            }
+            .padding(8)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(8)
+            .width('100%')
+          }
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else if (this.hasDoc) {
         List({ space: 3 }) {
           ForEach(this.events, (e: AssEvent, i: number) => {
             ListItem() {

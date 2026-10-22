@@ -92,10 +92,23 @@ assert len(d['events']) == 2
 assert d['events'][0]['startMs'] == 1230 and d['events'][0]['endMs'] == 3450
 assert d['events'][0]['fields'][d['textIndex']] == 'Hello, world'
 assert d['footer'].startswith('[Fonts]')
+assert d['styleFormat'][0] == 'Name'
+assert d['styleEntries'][0]['fields'][0] == 'Default'
+# Simulate the ArkUI style editor: change font name/size/primary colour.
+se = d['styleEntries'][0]['fields']
+se[1] = 'Noto Sans'
+se[2] = '64'
+se[3] = '&H00112233'
 eol = d['eol']
-out = d['header']
-if out and not out.endswith(eol):
-    out += eol
+header = d['stylePrefix']
+if header and not header.endswith(eol):
+    header += eol
+header += d['styleSection'] + eol
+header += 'Format: ' + ', '.join(d['styleFormat']) + eol
+for s in d['styleEntries']:
+    header += 'Style: ' + ','.join(s['fields']) + eol
+header += d['styleSuffix']
+out = header
 out += '[Events]' + eol + 'Format: ' + ', '.join(d['format']) + eol
 for e in d['events']:
     out += e['kind'] + ': ' + ','.join(e['fields']) + eol
@@ -114,6 +127,9 @@ a, b = doc(sys.argv[1]), doc(sys.argv[2])
 assert len(a['events']) == len(b['events']) == 2
 assert all(x['fields'] == y['fields'] for x, y in zip(a['events'], b['events']))
 assert a['footer'] == b['footer']
+assert b['styleEntries'][0]['fields'][1] == 'Noto Sans'
+assert b['styleEntries'][0]['fields'][2] == '64'
+assert b['styleEntries'][0]['fields'][3] == '&H00112233'
 PY
 
 echo "=== 1000-line CRLF/BOM roundtrip ==="
