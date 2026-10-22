@@ -21,6 +21,9 @@ UNSIGNED="$WS/app/entry/build/default/outputs/default/entry-default-unsigned.hap
 OUT="$WS/Aegisub-unsigned-v${VERSION}.hap"
 cp -f "$UNSIGNED" "$OUT"
 rm -f "$WS/Aegisub-unsigned.hap"
+for old in "$WS"/Aegisub-unsigned-v*.hap; do
+    [ "$old" = "$OUT" ] || rm -f "$old"
+done
 echo "unsigned: $OUT"
 
 echo "only unsigned HAP: $OUT"

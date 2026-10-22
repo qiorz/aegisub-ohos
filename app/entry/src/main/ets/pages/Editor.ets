@@ -17,7 +17,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.1.1';
 
 interface AssEvent {
   kind: string;
@@ -155,6 +155,7 @@ struct Editor {
   @State fontListStatus: string = '';
 
   private header: string = '';
+  private fontConfigPath: string = '';
   private footer: string = '';
   private eol: string = '\n';
   private bom: boolean = false;
@@ -512,22 +513,15 @@ struct Editor {
     this.activeText = text;
   }
 
-  private ensureFont(): string {
-    const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
-    const dest = `${dir}/DejaVuSans.ttf`;
+  private extractRawFont(asset: string, dest: string): void {
     try {
       if (fs.accessSync(dest)) {
-        return dest;
+        return;
       }
     } catch (e) {
       // not extracted yet
     }
-    try {
-      fs.mkdirSync(dir, true);
-    } catch (e) {
-      // exists
-    }
-    const bytes: Uint8Array = this.ctx.resourceManager.getRawFileContentSync('fonts/DejaVuSans.ttf');
+    const bytes: Uint8Array = this.ctx.resourceManager.getRawFileContentSync(asset);
     const f = fs.openSync(dest,
       fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
     try {
@@ -537,19 +531,29 @@ struct Editor {
     } finally {
       fs.closeSync(f);
     }
+  }
+
+  private ensureFont(): string {
+    const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
+    const dest = `${dir}/DejaVuSans.ttf`;
+    try {
+      fs.mkdirSync(dir, true);
+    } catch (e) {
+      // exists
+    }
+    this.extractRawFont('fonts/DejaVuSans.ttf', dest);
+    // CJK fallback: libass/fontconfig picks this for Chinese glyphs.
+    this.extractRawFont('fonts/DroidSansFallbackFull.ttf',
+      `${dir}/DroidSansFallbackFull.ttf`);
     return dest;
   }
 
   private ensureFontConfig(): string {
+    if (this.fontConfigPath !== '') {
+      return this.fontConfigPath;
+    }
     const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
     const path = `${dir}/fonts.conf`;
-    try {
-      if (fs.accessSync(path)) {
-        return path;
-      }
-    } catch (e) {
-      // not generated yet
-    }
     try {
       fs.mkdirSync(dir, true);
       const cache = `${this.ctx.cacheDir}/fc-cache`;
@@ -561,9 +565,11 @@ struct Editor {
       const xml = '<?xml version="1.0"?>\n' +
         '<fontconfig>\n' +
         '  <dir>/system/fonts</dir>\n' +
+        `  <dir>${dir}</dir>\n` +
         `  <cachedir>${cache}</cachedir>\n` +
         '</fontconfig>\n';
       this.writeText(path, xml);
+      this.fontConfigPath = path;
       return path;
     } catch (e) {
       return '';
@@ -1391,9 +1397,9 @@ struct Editor {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-        Button('撤销').width(46).fontSize(11).enabled(this.canUndo)
+        Button('撤销').width(60).fontSize(11).enabled(this.canUndo)
           .onClick(() => { this.undo(); })
-        Button('重做').width(46).fontSize(11).enabled(this.canRedo)
+        Button('重做').width(60).fontSize(11).enabled(this.canRedo)
           .onClick(() => { this.redo(); })
       }
       .width('100%')
@@ -1546,7 +1552,8 @@ struct Editor {
             Stack({ alignContent: Alignment.Bottom }) {
               Video({ src: this.videoUri, controller: this.videoController })
                 .width('100%')
-                .height(220)
+                .height('100%')
+                .objectFit(ImageFit.Contain)
                 .controls(true)
                 .onPrepared((e: PreparedInfo) => {
                   this.videoDuration = e.duration;
@@ -1566,7 +1573,7 @@ struct Editor {
               if (this.subtitleImage !== undefined) {
                 Image(this.subtitleImage)
                   .width('100%')
-                  .height(220)
+                  .height('100%')
                   .objectFit(ImageFit.Contain)
               } else {
                 Text(this.activeText)
@@ -1579,13 +1586,15 @@ struct Editor {
               }
             }
             .width('100%')
-            .height(220)
+            .aspectRatio(16.0 / 9.0)
+            .constraintSize({ maxWidth: 640 })
           } else {
             Column() {
               Text('选择 MP4 / MKV / TS 预览字幕').fontSize(12).fontColor('#888888')
             }
             .width('100%')
-            .height(220)
+            .aspectRatio(16.0 / 9.0)
+            .constraintSize({ maxWidth: 640 })
             .justifyContent(FlexAlign.Center)
             .backgroundColor('#FFFFFF')
             .borderRadius(8)
@@ -1631,6 +1640,7 @@ struct Editor {
         }
         .layoutWeight(1)
         .width('100%')
+        .alignItems(HorizontalAlign.Center)
       } else if (this.hasDoc && this.showStyles) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {

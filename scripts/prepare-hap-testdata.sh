@@ -31,15 +31,22 @@ with open(os.path.join(root, 'manifest.json'), 'w', encoding='utf-8') as f:
 print('fixture files:', len(files))
 PY
 
-# A font for libass preview (libass is built without fontconfig).
+# Preview fonts: DejaVuSans is the fallback; DroidSansFallback covers CJK.
 FONT_SRC=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+CJK_SRC=/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf
 FONT_DEST="$WS/app/entry/src/main/resources/rawfile/fonts"
+mkdir -p "$FONT_DEST"
 if [ -f "$FONT_SRC" ]; then
-    mkdir -p "$FONT_DEST"
     cp -f "$FONT_SRC" "$FONT_DEST/DejaVuSans.ttf"
     echo "font: $FONT_DEST/DejaVuSans.ttf"
 else
     echo "WARN: $FONT_SRC not found; styled preview will be unavailable"
+fi
+if [ -f "$CJK_SRC" ]; then
+    cp -f "$CJK_SRC" "$FONT_DEST/DroidSansFallbackFull.ttf"
+    echo "font: $FONT_DEST/DroidSansFallbackFull.ttf"
+else
+    echo "WARN: $CJK_SRC not found; Chinese glyphs may show as boxes"
 fi
 
 du -sh "$DEST"
