@@ -11,7 +11,7 @@
 | `build/` | 出树构建目录（不入库） |
 | `patches/` | 我方改动，按上游路径命名的 patch 或 overlay 文件 |
 | `scripts/` | 构建、打包、真机部署脚本 |
-| `out/` | HAP / 静态二进制等产物（不入库） |
+| `out/` | 其他构建产物（HAP 统一放工作区根目录，不入库） |
 | `docs/` | 方案、验证记录；环境类文档以软链引用共用版本 |
 
 ## 第一步该看什么
@@ -26,7 +26,7 @@
   全静态 `gtest-main` 在 qemu-aarch64 下 **371/371 测试通过**。
   详见 [进度-2026-10-22](docs/进度-2026-10-22.md)。
 - **测试 HAP**：可在应用沙箱内跑完整 371 项测试并手动导出日志。
-  产物 `out/AegisubTest-unsigned.hap` / `out/AegisubTest-selfsigned.hap`，
+  产物 `AegisubTest-unsigned.hap` / `AegisubTest-selfsigned.hap`，
   用法与签名见 [HAP测试包-2026-10-22](docs/HAP测试包-2026-10-22.md)。
 - 当前是 **core-only**（`-Dcore_only=true`）：不含 GUI、音频、视频、fontconfig/libass。
 - 真机未验证；自签 HAP 在华为设备上会被拒绝，需 AGC 的 `.cer` / `.p7b`。

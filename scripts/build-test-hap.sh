@@ -15,16 +15,15 @@ hvigorw --mode module -p product=default -p module=entry@default assembleHap --n
 
 UNSIGNED="$WS/app/entry/build/default/outputs/default/entry-default-unsigned.hap"
 [ -f "$UNSIGNED" ] || { echo "missing $UNSIGNED"; exit 1; }
-mkdir -p "$WS/out"
-cp -f "$UNSIGNED" "$WS/out/AegisubTest-unsigned.hap"
-echo "unsigned: $WS/out/AegisubTest-unsigned.hap"
+cp -f "$UNSIGNED" "$WS/AegisubTest-unsigned.hap"
+echo "unsigned: $WS/AegisubTest-unsigned.hap"
 
 if [ -n "${AEGISUB_SIGN_P12:-}" ] && [ -n "${AEGISUB_SIGN_CER:-}" ] && [ -n "${AEGISUB_SIGN_PROFILE:-}" ]; then
     bash "$WS/scripts/sign-test-hap.sh" \
-        "$WS/out/AegisubTest-unsigned.hap" \
+        "$WS/AegisubTest-unsigned.hap" \
         "$AEGISUB_SIGN_P12" "$AEGISUB_SIGN_CER" "$AEGISUB_SIGN_PROFILE" \
         "${AEGISUB_KEY_ALIAS:-app-key}" "${AEGISUB_KEY_PWD:-123456}" \
-        "$WS/out/AegisubTest-signed.hap"
+        "$WS/AegisubTest-signed.hap"
 else
     echo "跳过签名（设置 AEGISUB_SIGN_P12 / AEGISUB_SIGN_CER / AEGISUB_SIGN_PROFILE 可自动签）"
 fi
