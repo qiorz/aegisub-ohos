@@ -9,6 +9,14 @@
 *.so
 *.a
 *.o
+# HAP 工程：构建产物、运行时解压的 fixtures、签名私钥/证书
+/app/entry/build/
+/app/entry/.cxx/
+/app/.hvigor/
+/app/entry/src/main/resources/rawfile/testdata/
+/app/signing/*.p12
+/app/signing/*.p7b
+/app/signing/*.cer
 # 编辑器/系统
 .DS_Store
 *.swp

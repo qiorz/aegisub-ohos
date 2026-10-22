@@ -1,0 +1,25 @@
+{
+  "version-name": "0.1.0",
+  "version-code": 1000000,
+  "app-distribution-type": "os_integration",
+  "uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "validity": {
+    "not-before": 1700000000,
+    "not-after": 2200000000
+  },
+  "type": "debug",
+  "bundle-info": {
+    "developer-id": "OpenHarmony",
+    "development-certificate": "MIICxTCCAa2gAwIBAgIEPc9r/jANBgkqhkiG9w0BAQsFADBXMQswCQYDVQQGEwJDTjEUMBIGA1UECgwLT3Blbkhhcm1vbnkxFDASBgNVBAsMC09wZW5IYXJtb255MRwwGgYDVQQDDBNPcGVuSGFybW9ueSBSb290IENBMB4XDTI2MTAyMTA4MDkzOVoXDTM2MTAxODA4MDkzOVowUDELMAkGA1UEBhMCQ04xFDASBgNVBAoMC09wZW5IYXJtb255MRQwEgYDVQQLDAtPcGVuSGFybW9ueTEVMBMGA1UEAwwMSGVsbG9IYXJtb255MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEnMBVkCZz+Jrmx9j9RrAdzNPYTGpe3T9b264gaqvkRYTaBnjhHQoOIxuOK79eVM7RmYk1F9xxMeE/vnGNASuleaNrMGkwHQYDVR0OBBYEFJHyFh/z+q+IiaWvjf7uBtJ4h7ntMAkGA1UdEwQCMAAwDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMDMBgGDCsGAQQBj1sCgngBAwQIMAYCAQEKAQAwDQYJKoZIhvcNAQELBQADggEBACgN5CUhX+FcFzRKZvhxje6tFGgaj2MEepYw2WiB3eIimq5rJh68CBSS3HANaVVTfnnBUeH29jbc1QwBc5OhkYSdJRVl24A/TdSMnjTFDFAUD5FSTFiZ2ejCFVcKsxTb4rniCOxhxVvgUbU07x379z4CLO6kkJ0A/bwn1JA/JIQaTIa3HTOpwhVBoViEU6+WCkwnOq1QzTLR0+DTT/Wcsy20m76cmEQqqj2+JDHqUBd6gpgwxPYIi7M7UqybaIgt5NjmJgi42Nzkl/hWT24h/1v7Fxe12m+qmhk17qYe+hM8tMoea/6RiVQ42vX5WWThoPHD6x6Mt/vGTO8H5i73Soo=",
+    "bundle-name": "com.example.aegisubtest",
+    "apl": "normal",
+    "app-feature": "hos_normal_app"
+  },
+  "acls": {
+    "allowed-acls": []
+  },
+  "permissions": {
+    "restricted-permissions": []
+  },
+  "issuer": "pki_internal"
+}

@@ -1,0 +1,6 @@
+{
+  "modelVersion": "5.1.0",
+  "description": "Aegisub libaegisub test harness for HarmonyOS",
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,33 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "-DAEGISUB_SRC=/root/opt/dsh/workspace-aegisub/src/Aegisub -DAEGISUB_PREFIX=/root/opt/dsh/workspace-aegisub/build/deps/prefix -DAEGISUB_BUILD=/root/opt/dsh/workspace-aegisub/build/libaegisub",
+      "cppFlags": "",
+      "abiFilters": [
+        "arm64-v8a"
+      ]
+    }
+  },
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": false,
+            "files": [
+              "./obfuscation-rules.txt"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "default"
+    }
+  ]
+}
