@@ -1047,6 +1047,30 @@ struct Editor {
     this.status = `时间偏移 ${deltaMs > 0 ? '+' : ''}${deltaMs} ms`;
   }
 
+  private shiftAll(deltaMs: number): void {
+    if (this.events.length === 0 || this.startIndex < 0 || this.endIndex < 0) {
+      return;
+    }
+    this.applyEdit();
+    this.pushUndo();
+    const arr: AssEvent[] = [];
+    for (const e of this.events) {
+      const f: string[] = e.fields.slice();
+      let start = e.startMs;
+      let end = e.endMs;
+      if (this.startIndex < f.length && this.endIndex < f.length) {
+        start = Math.max(0, aegisub.timeToMs(f[this.startIndex]) + deltaMs);
+        end = Math.max(start, aegisub.timeToMs(f[this.endIndex]) + deltaMs);
+        f[this.startIndex] = aegisub.msToTime(start);
+        f[this.endIndex] = aegisub.msToTime(end);
+      }
+      arr.push({ kind: e.kind, fields: f, startMs: start, endMs: end });
+    }
+    this.events = arr;
+    this.loadSelected();
+    this.status = `全部事件偏移 ${deltaMs > 0 ? '+' : ''}${deltaMs} ms`;
+  }
+
   private setBoundary(toStart: boolean): void {
     if (this.selected < 0 || this.selected >= this.events.length ||
         this.startIndex < 0 || this.endIndex < 0) {
@@ -1829,6 +1853,16 @@ struct Editor {
             Button('终点=当前').layoutWeight(1).fontSize(10)
               .enabled(this.selected >= 0)
               .onClick(() => { this.setBoundary(false); })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Button('全部-100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.events.length > 0)
+              .onClick(() => { this.shiftAll(-100); })
+            Button('全部+100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.events.length > 0)
+              .onClick(() => { this.shiftAll(100); })
           }
           .width('100%')
 
