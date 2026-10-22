@@ -13,10 +13,15 @@ cd "$WS/app"
 echo "=== hvigorw assembleHap ==="
 hvigorw --mode module -p product=default -p module=entry@default assembleHap --no-daemon
 
+VERSION=$(sed -n 's/.*"versionName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$WS/app/AppScope/app.json5" | head -1)
+[ -n "$VERSION" ] || VERSION=0.0.0
 UNSIGNED="$WS/app/entry/build/default/outputs/default/entry-default-unsigned.hap"
 [ -f "$UNSIGNED" ] || { echo "missing $UNSIGNED"; exit 1; }
-cp -f "$UNSIGNED" "$WS/Aegisub-unsigned.hap"
-echo "unsigned: $WS/Aegisub-unsigned.hap"
+OUT="$WS/Aegisub-unsigned-v${VERSION}.hap"
+cp -f "$UNSIGNED" "$OUT"
+rm -f "$WS/Aegisub-unsigned.hap"
+echo "unsigned: $OUT"
 
-echo "只交付 unsigned HAP：$WS/Aegisub-unsigned.hap"
+echo "only unsigned HAP: $OUT"
 echo "需要签名时请自行执行 scripts/sign-test-hap.sh（本工作区不再产出 signed HAP）"

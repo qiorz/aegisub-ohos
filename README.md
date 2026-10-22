@@ -33,7 +33,7 @@
   样式新增/删除/改名/字体/字号/颜色/粗斜体/对齐、台词样式下拉、
   撤销/重做、视频预览叠加字幕、libass 单帧/自动样式预览、导出 ASS/SRT；
   测试页 `pages/Index` 保留（沙箱内 371 项 gtest + 日志导出）。
-  产物 `Aegisub-unsigned.hap`（只交付未签名包，签名由使用者完成），
+  产物 `Aegisub-unsigned-v0.1.0.hap`（只交付未签名包，签名由使用者完成），
   用法与签名见 [HAP测试包-2026-10-22](docs/HAP测试包-2026-10-22.md)。
 - 核心库仍是 **core-only**；应用壳已有 ArkUI 编辑与纯文本视频预览，
   fontconfig 已接入（扫描 `/system/fonts`，样式页可枚举/选择系统字体，

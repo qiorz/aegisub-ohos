@@ -17,6 +17,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
+const APP_VERSION = '0.1.0';
 
 interface AssEvent {
   kind: string;
@@ -1382,17 +1383,17 @@ struct Editor {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
         Column({ space: 2 }) {
-          Text('Aegisub OHOS').fontSize(22).fontWeight(FontWeight.Bold)
-          Text(this.fileName === '' ? '未打开文件'
-            : `${this.fileName}${this.dirty ? ' *' : ''}`)
+          Text('Aegisub OHOS').fontSize(20).fontWeight(FontWeight.Bold)
+          Text(`v${APP_VERSION} · ${this.fileName === '' ? '未打开文件'
+            : `${this.fileName}${this.dirty ? ' *' : ''}`}`)
             .fontSize(10).fontColor('#888888').maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-        Button('↶').width(38).fontSize(12).enabled(this.canUndo)
+        Button('撤销').width(46).fontSize(11).enabled(this.canUndo)
           .onClick(() => { this.undo(); })
-        Button('↷').width(38).fontSize(12).enabled(this.canRedo)
+        Button('重做').width(46).fontSize(11).enabled(this.canRedo)
           .onClick(() => { this.redo(); })
       }
       .width('100%')
@@ -1406,6 +1407,24 @@ struct Editor {
           .onClick(() => { this.exportAss(); })
         Button('SRT').layoutWeight(1).enabled(this.hasDoc)
           .onClick(() => { this.exportSrt(); })
+      }
+      .width('100%')
+
+      Row({ space: 6 }) {
+        Button('导入视频').layoutWeight(1).fontSize(11).enabled(this.hasDoc)
+          .onClick(() => {
+            this.showVideo = true;
+            this.showStyles = false;
+            this.showAudio = false;
+            this.pickVideo();
+          })
+        Button('导入音频').layoutWeight(1).fontSize(11).enabled(this.hasDoc)
+          .onClick(() => {
+            this.showAudio = true;
+            this.showStyles = false;
+            this.showVideo = false;
+            this.pickAudio();
+          })
       }
       .width('100%')
 
