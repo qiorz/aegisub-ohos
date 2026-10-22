@@ -12,6 +12,8 @@ import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { image } from '@kit.ImageKit';
+import { media } from '@kit.MediaKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
@@ -100,6 +102,12 @@ struct Editor {
   @State editEffect: string = '';
   @State showAdvanced: boolean = false;
   @State filterText: string = '';
+  @State showAudio: boolean = false;
+  @State audioName: string = '';
+  @State audioPath: string = '';
+  @State audioStatus: string = '选择音频做打轴';
+  @State audioDuration: number = 0;
+  @State audioPlaying: boolean = false;
   @State showStyles: boolean = false;
   @State styleSection: string = '';
   @State stylePrefix: string = '';
@@ -139,6 +147,7 @@ struct Editor {
   private undoStack: EditorSnapshot[] = [];
   private redoStack: EditorSnapshot[] = [];
   private videoController: VideoController = new VideoController();
+  private audioPlayer: media.AVPlayer | undefined = undefined;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -368,6 +377,7 @@ struct Editor {
     this.showVideo = !this.showVideo;
     if (this.showVideo) {
       this.showStyles = false;
+      this.showAudio = false;
       this.updateActiveText();
     }
   }
@@ -535,6 +545,105 @@ struct Editor {
     }
   }
 
+  private toggleAudio(): void {
+    this.showAudio = !this.showAudio;
+    if (this.showAudio) {
+      this.showStyles = false;
+      this.showVideo = false;
+      this.updateActiveText();
+    }
+  }
+
+  async pickAudio(): Promise<void> {
+    try {
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg'];
+      const doc = new picker.DocumentViewPicker(this.ctx);
+      const uris = await doc.select(opt);
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      let name = uris[0].substring(uris[0].lastIndexOf('/') + 1);
+      try {
+        name = decodeURIComponent(name);
+      } catch (e) {
+        // keep raw
+      }
+      const dir = `${this.ctx.filesDir}/audio`;
+      try {
+        fs.mkdirSync(dir, true);
+      } catch (e) {
+        // exists
+      }
+      const dot = name.lastIndexOf('.');
+      const ext = dot > 0 ? name.substring(dot) : '.mp3';
+      const dest = `${dir}/audio-${stamp()}${ext}`;
+      this.copyTo(uris[0], dest);
+      if (this.audioPlayer !== undefined) {
+        try {
+          await this.audioPlayer.release();
+        } catch (e) {
+          // already released
+        }
+        this.audioPlayer = undefined;
+      }
+      const player = await media.createAVPlayer();
+      this.audioPlayer = player;
+      player.url = fileUri.getUriFromPath(dest);
+      player.on('timeUpdate', (time: number) => {
+        this.currentMs = time;
+        this.updateActiveText();
+      });
+      player.on('durationUpdate', (duration: number) => {
+        this.audioDuration = duration;
+      });
+      player.on('stateChange', (state: media.AVPlayerState) => {
+        this.audioPlaying = state === 'playing';
+        if (state === 'completed') {
+          this.audioPlaying = false;
+        }
+      });
+      player.on('error', (err: BusinessError) => {
+        this.audioStatus = `音频错误 ${err.code}`;
+      });
+      await player.prepare();
+      this.audioPath = dest;
+      this.audioName = name;
+      this.audioStatus = '已加载；播放或用 ±1s 定位';
+      this.currentMs = 0;
+      this.audioDuration = 0;
+    } catch (e) {
+      this.audioStatus = `选择音频失败：${JSON.stringify(e)}`;
+    }
+  }
+
+  async toggleAudioPlay(): Promise<void> {
+    if (this.audioPlayer === undefined) {
+      return;
+    }
+    try {
+      if (this.audioPlaying) {
+        await this.audioPlayer.pause();
+      } else {
+        await this.audioPlayer.play();
+      }
+    } catch (e) {
+      this.audioStatus = `播放失败：${JSON.stringify(e)}`;
+    }
+  }
+
+  private seekAudio(deltaMs: number): void {
+    if (this.audioPlayer === undefined) {
+      return;
+    }
+    const target = Math.max(0, Math.min(this.currentMs + deltaMs,
+      this.audioDuration > 0 ? this.audioDuration : this.currentMs + deltaMs));
+    this.audioPlayer.seek(target);
+    this.currentMs = target;
+    this.updateActiveText();
+  }
+
   private selectActiveEvent(): void {
     for (let i = 0; i < this.events.length; i++) {
       const e = this.events[i];
@@ -544,6 +653,7 @@ struct Editor {
         this.loadSelected();
         this.showVideo = false;
         this.showStyles = false;
+        this.showAudio = false;
         this.status = `已选中当前播放行 #${i + 1}`;
         return;
       }
@@ -611,6 +721,7 @@ struct Editor {
     this.renderStatus = '';
     this.autoStyled = false;
     this.filterText = '';
+    this.showAudio = false;
   }
 
   private loadSelected(): void {
@@ -1096,6 +1207,16 @@ struct Editor {
     }
   }
 
+  aboutToDisappear(): void {
+    if (this.audioPlayer !== undefined) {
+      const player = this.audioPlayer;
+      this.audioPlayer = undefined;
+      player.release().catch(() => {
+        // already released
+      });
+    }
+  }
+
   build() {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
@@ -1130,8 +1251,12 @@ struct Editor {
       Row({ space: 6 }) {
         Button('台词')
           .layoutWeight(1)
-          .backgroundColor(!this.showStyles && !this.showVideo ? '#DCE6FF' : '#F0F0F0')
-          .onClick(() => { this.showStyles = false; this.showVideo = false; })
+          .backgroundColor(!this.showStyles && !this.showVideo && !this.showAudio ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => {
+            this.showStyles = false;
+            this.showVideo = false;
+            this.showAudio = false;
+          })
         Button('样式')
           .layoutWeight(1)
           .enabled(this.hasDoc)
@@ -1139,6 +1264,7 @@ struct Editor {
           .onClick(() => {
             this.showStyles = true;
             this.showVideo = false;
+            this.showAudio = false;
             if (this.styleEntries.length > 0 && this.styleSelected < 0) {
               this.selectStyle(0);
             }
@@ -1148,6 +1274,11 @@ struct Editor {
           .enabled(this.hasDoc)
           .backgroundColor(this.showVideo ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleVideo(); })
+        Button('音频')
+          .layoutWeight(1)
+          .enabled(this.hasDoc)
+          .backgroundColor(this.showAudio ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => { this.toggleAudio(); })
         Button('测试')
           .layoutWeight(1)
           .onClick(() => { router.pushUrl({ url: 'pages/Index' }); })
@@ -1161,7 +1292,48 @@ struct Editor {
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      if (this.hasDoc && this.showVideo) {
+      if (this.hasDoc && this.showAudio) {
+        Column({ space: 6 }) {
+          Row({ space: 6 }) {
+            Button('选择音频').fontSize(11)
+              .onClick(() => { this.pickAudio(); })
+            Text(this.audioName === '' ? '未选择音频' : this.audioName)
+              .fontSize(10).fontColor('#666666').layoutWeight(1)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+
+          Text(this.audioStatus).fontSize(10).fontColor('#888888').width('100%')
+
+          if (this.audioPath !== '') {
+            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${(this.audioDuration / 1000).toFixed(2)}s`)
+              .fontSize(11).fontColor('#4263EB').width('100%')
+            Row({ space: 6 }) {
+              Button(this.audioPlaying ? '暂停' : '播放').layoutWeight(1).fontSize(11)
+                .onClick(() => { this.toggleAudioPlay(); })
+              Button('-1s').layoutWeight(1).fontSize(11)
+                .onClick(() => { this.seekAudio(-1000); })
+              Button('+1s').layoutWeight(1).fontSize(11)
+                .onClick(() => { this.seekAudio(1000); })
+            }
+            .width('100%')
+
+            Row({ space: 6 }) {
+              Button('设为起点').layoutWeight(1).fontSize(11)
+                .enabled(this.selected >= 0)
+                .onClick(() => { this.setBoundary(true); })
+              Button('设为终点').layoutWeight(1).fontSize(11)
+                .enabled(this.selected >= 0)
+                .onClick(() => { this.setBoundary(false); })
+              Button('选中当前行').layoutWeight(1).fontSize(11)
+                .onClick(() => { this.selectActiveEvent(); })
+            }
+            .width('100%')
+          }
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else if (this.hasDoc && this.showVideo) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
             Button('选择视频').fontSize(11)
