@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.5';
+const APP_VERSION = '0.1.6';
 
 interface AssEvent {
   kind: string;
@@ -165,6 +165,7 @@ struct Editor {
   private undoStack: EditorSnapshot[] = [];
   private redoStack: EditorSnapshot[] = [];
   private videoController: VideoController = new VideoController();
+  private pendingSeekMs: number = -1;
   private audioPlayer: media.AVPlayer | undefined = undefined;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
@@ -746,6 +747,7 @@ struct Editor {
       this.videoUri = fileUri.getUriFromPath(dest);
       this.videoName = name;
       this.currentMs = 0;
+      this.pendingSeekMs = -1;
       this.subtitleImage = undefined;
       this.autoStyled = false;
       this.videoStatus = '已选择；点播放预览字幕';
@@ -903,12 +905,8 @@ struct Editor {
     if (this.selected >= 0 && this.selected < this.events.length) {
       const e = this.events[this.selected];
       this.currentMs = e.startMs;
+      this.pendingSeekMs = e.startMs;
       this.updateActiveText();
-      try {
-        this.videoController.setCurrentTime(e.startMs / 1000);
-      } catch (ex) {
-        // player not prepared yet
-      }
     }
     this.videoStatus = this.selected >= 0
       ? `返回视频，定位到 #${this.selected + 1}` : '返回视频';
@@ -1732,6 +1730,18 @@ struct Editor {
                     .controls(true)
                     .onPrepared((e: PreparedInfo) => {
                       this.videoDuration = e.duration;
+                      if (this.pendingSeekMs >= 0) {
+                        const t = this.pendingSeekMs;
+                        this.pendingSeekMs = -1;
+                        try {
+                          this.videoController.setCurrentTime(t / 1000);
+                          this.currentMs = t;
+                          this.updateActiveText();
+                          this.videoStatus = `已定位到 ${(t / 1000).toFixed(2)}s`;
+                        } catch (ex) {
+                          this.videoStatus = `定位失败：${JSON.stringify(ex)}`;
+                        }
+                      }
                     })
                     .onUpdate((e: PlaybackInfo) => {
                       this.currentMs = e.time * 1000;
