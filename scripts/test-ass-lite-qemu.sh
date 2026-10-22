@@ -3,7 +3,7 @@
 # 解析、时间归一化、序列化回环（含 1000 行 / CRLF / BOM 压力用例）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/src/Aegisub"

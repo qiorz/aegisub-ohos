@@ -2,7 +2,7 @@
 # 按依赖顺序构建 OHOS 静态依赖。耗时主要在 ICU（host + cross）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WS"
 
 bash scripts/build-zlib-ohos.sh

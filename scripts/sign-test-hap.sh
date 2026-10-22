@@ -6,7 +6,7 @@
 # com.example.aegisubtest，且包含设备 UDID）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh" 2>/dev/null || true
 
 if [ $# -lt 4 ]; then

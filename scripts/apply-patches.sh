@@ -3,7 +3,7 @@
 # 用法：在干净 checkout 上执行一次；重复执行会跳过已应用的补丁。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 S="$WS/src/Aegisub"
 BOOST="$WS/build/deps/src/boost"
 

@@ -3,7 +3,7 @@
 # it under qemu. This validates the HAP's in-app test harness without a device.
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/src/Aegisub"

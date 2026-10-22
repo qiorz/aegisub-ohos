@@ -4,7 +4,7 @@
 #   设置 AEGISUB_SIGN_P12 / AEGISUB_SIGN_CER / AEGISUB_SIGN_PROFILE 后自动签名。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 bash "$WS/scripts/prepare-hap-testdata.sh"

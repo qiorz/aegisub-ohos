@@ -32,7 +32,7 @@ NDK 位于 `$DEVECO_SDK_HOME/default/openharmony/native`（默认
 
 - `hdc list targets` 确认在线；装包 `hdc install -r xxx.hap`。
 - 抓日志：`hdc hilog`，崩溃看 `hdc shell` 下的 faultlogger 目录。
-- 签名：需要 AGC 签发的 `.cer` 与 debug `.p7b` 配合本机 `/opt/harmony-signing/app.p12`。
+- 签名：需要 AGC 签发的 `.cer` 与 debug `.p7b` 配合本机 `<signing-dir>/app.p12`。
 
 ## 5. 依赖复用注意
 

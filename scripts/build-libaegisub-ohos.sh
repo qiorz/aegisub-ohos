@@ -3,13 +3,19 @@
 # 前置：build/deps/prefix 内已有 zlib / ICU / LuaJIT / GoogleTest / Boost 静态库。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 PREFIX="$WS/build/deps/prefix"
 SRC="$WS/src/Aegisub"
 BUILD="$WS/build/libaegisub"
 LOG="$WS/build/logs/libaegisub.log"
+
+# 由模板生成真实路径的 cross file（meson 不展开环境变量）
+mkdir -p "$WS/build/logs"
+CROSS_FILE="$WS/build/cross-ohos-aarch64.ini"
+sed -e "s|@WS@|$WS|g" -e "s|@OHOS_NDK@|$OHOS_NDK|g" \
+    "$WS/scripts/cross-ohos-aarch64.ini" > "$CROSS_FILE"
 
 mkdir -p "$WS/build/logs"
 exec > >(tee -a "$LOG") 2>&1
@@ -27,7 +33,7 @@ fi
 if [ ! -d "$BUILD" ]; then
     echo "=== [$(date)] meson setup ==="
     meson setup "$BUILD" "$SRC" \
-        --cross-file "$WS/scripts/cross-ohos-aarch64.ini" \
+        --cross-file "$CROSS_FILE" \
         --buildtype=release \
         --wrap-mode=nodownload \
         -Dcore_only=true \

@@ -3,7 +3,11 @@
   "buildOption": {
     "externalNativeOptions": {
       "path": "./src/main/cpp/CMakeLists.txt",
-      "arguments": "-DAEGISUB_SRC=/root/opt/dsh/workspace-aegisub/src/Aegisub -DAEGISUB_PREFIX=/root/opt/dsh/workspace-aegisub/build/deps/prefix -DAEGISUB_BUILD=/root/opt/dsh/workspace-aegisub/build/libaegisub",
+      // 换机器后必须改成本机实际路径（hvigor 不展开环境变量）：
+      //   AEGISUB_SRC    = 上游源码根，如 <repo>/src/Aegisub
+      //   AEGISUB_PREFIX = 依赖安装前缀，如 <repo>/build/deps/prefix
+      //   AEGISUB_BUILD  = libaegisub 构建目录，如 <repo>/build/libaegisub
+      "arguments": "-DAEGISUB_SRC=/path/to/aegisub-ohos/src/Aegisub -DAEGISUB_PREFIX=/path/to/aegisub-ohos/build/deps/prefix -DAEGISUB_BUILD=/path/to/aegisub-ohos/build/libaegisub",
       "cppFlags": "",
       "abiFilters": [
         "arm64-v8a"

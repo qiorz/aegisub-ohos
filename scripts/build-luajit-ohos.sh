@@ -4,7 +4,7 @@
 # == 'ohos' 不识别，且需要在 configure 阶段运行目标二进制。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/build/deps/src/luajit/src"

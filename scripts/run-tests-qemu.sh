@@ -3,7 +3,7 @@
 # 注意：测试用相对路径 data/...，必须在 build/libaegisub/tests 下运行。
 set -uo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 BUILD="$WS/build/libaegisub"

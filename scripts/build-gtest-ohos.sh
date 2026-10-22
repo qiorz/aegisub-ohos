@@ -3,7 +3,7 @@
 # Debian bookworm 只有 1.12.1；Aegisub 的测试要求已相应放宽到 >=1.12.0。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/build/deps/src/googletest-release-1.12.1"

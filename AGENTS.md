@@ -21,7 +21,7 @@
    `qemu-aarch64-static` 执行；**动态链接会因缺 `ld-musl-aarch64.so.1` 段错误**。
    适合跑纯逻辑单测（ass 解析、时间轴运算），不需要真机。
 2. **真机**：优先「反向 SSH 隧道 + hdc」，可直接装包抓 hilog。见 `docs/签名与真机联调指南.md`。
-3. **签名**：`/opt/harmony-signing/app.p12` 与 CSR 已就绪，需 AGC 换回 `.cer` / `.p7b`。
+3. **签名**：`<signing-dir>/app.p12` 与 CSR 已就绪，需 AGC 换回 `.cer` / `.p7b`。
 
 ## 工作约定
 

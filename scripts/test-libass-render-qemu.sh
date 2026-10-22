@@ -3,7 +3,7 @@
 # 断言至少产生一个非透明像素。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 PREFIX="$WS/build/deps/prefix"

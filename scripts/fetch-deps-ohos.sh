@@ -4,7 +4,7 @@
 #   boost/  icu/  zlib-1.2.13.dfsg/  googletest-release-1.12.1/  luajit/
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$WS/build/deps/src"
 mkdir -p "$SRC"
 cd "$SRC"

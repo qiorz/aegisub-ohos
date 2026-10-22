@@ -3,7 +3,7 @@
 # fixtures 很小（keyframe ~2.1M、vfr ~404K、charset/options/lua 各几十 K）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$WS/src/Aegisub"
 DEST="$WS/app/entry/src/main/resources/rawfile/testdata"
 

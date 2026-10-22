@@ -3,7 +3,7 @@
 # 交叉编译 ICU 需要一个同版本的宿主机构建树提供 genrb/genccode 等工具。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/build/deps/src/icu/source"

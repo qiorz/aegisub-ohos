@@ -3,7 +3,7 @@
 # 上游已迁移到 TypesettingTools/Aegisub；旧 Aegisub/Aegisub 停在 3.2.2。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$WS/src/Aegisub"
 TAG=v3.5.1
 URL=https://github.com/TypesettingTools/Aegisub.git

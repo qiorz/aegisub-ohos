@@ -2,7 +2,7 @@
 # qemu 回归：WAV PCM 峰值解析（与 HAP 同一份 waveform.cpp）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 OUT="$WS/build/waveform-test"
 DATA="$WS/build/waveform-test-data"

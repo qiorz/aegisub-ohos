@@ -3,7 +3,7 @@
 # 前置：build/deps/src/boost（Boost 1.83 源码）、build/deps/prefix（ICU/zlib 已装）
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 BOOST="$WS/build/deps/src/boost"

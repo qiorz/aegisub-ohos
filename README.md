@@ -12,7 +12,7 @@
 | `patches/` | 我方改动，按上游路径命名的 patch 或 overlay 文件 |
 | `scripts/` | 构建、打包、真机部署脚本 |
 | `out/` | 其他构建产物（HAP 统一放工作区根目录，不入库） |
-| `docs/` | 方案、验证记录；环境类文档以软链引用共用版本 |
+| `docs/` | 方案、验证记录、环境与签名说明 |
 
 ## 第一步该看什么
 
@@ -54,3 +54,30 @@ bash scripts/apply-patches.sh
 bash scripts/build-libaegisub-ohos.sh --wipe
 bash scripts/run-tests-qemu.sh
 ```
+
+## 构建前置
+
+- HarmonyOS Command Line Tools 26.0.0（或 DevEco Studio 同版本 SDK），提供 `hvigorw` / `ohpm` / `hdc`；
+- meson + ninja（构建 libaegisub）、CMake 3.28+（NDK 自带即可）；
+- `qemu-aarch64-static`（可选，仅用于跑静态链接的单测）；
+- 脚本会自动把 `WS` 推导为仓库根目录，不再依赖写死的绝对路径；需要换 SDK 位置时改
+  `scripts/env.sh` 里的 `HARMONYOS_CLT`。
+
+依赖与上游源码不入库，按上面的“复现入口”脚本自动拉取/编译。
+
+## 本仓库不包含
+
+- 上游源码 checkout（`src/`）、构建目录（`build/`）、构建产物（`out/`、`*.hap`）；
+- 签名材料（`.p12` / `.cer` / `.p7b`）与设备日志。
+
+可安装的 HAP 放在 **Releases**。本项目只交付**未签名**包，签名证书需使用者自行申请
+（华为 AGC 签发，profile 需绑定你的设备 UDID）。
+
+## 许可
+
+- 上游 Aegisub 采用 **BSD-3-Clause**，全文见 [LICENSE](LICENSE)。本移植项目同样以 BSD-3-Clause 发布。
+- 本项目是修改版：改动集中在 `patches/`、`app/entry/src/main/cpp/` 与 `app/entry/src/main/ets/`。
+- 静态链接的第三方库（ICU、LuaJIT、Boost、libass、fontconfig、freetype、fribidi、
+  harfbuzz、expat、zlib、GoogleTest）各自遵循其原始许可（多为 MIT / BSD / ISC / ICU 许可），
+  分发二进制时需保留各自的版权声明。
+- “Aegisub” 名称与图标归上游项目所有，本项目与上游无隶属关系。

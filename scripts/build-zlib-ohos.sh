@@ -3,7 +3,7 @@
 # 源码：build/deps/src/zlib-1.2.13.dfsg（apt-get source zlib 解包）
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
 
 SRC="$WS/build/deps/src/zlib-1.2.13.dfsg"
