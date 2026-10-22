@@ -312,6 +312,15 @@ std::string LoadAssJson(const std::string& path) {
     return to_json(parse_ass(ss.str()));
 }
 
+std::string NormalizeAssTime(const std::string& text) {
+    bool has_digit = false;
+    for (unsigned char c : text)
+        if (std::isdigit(c)) { has_digit = true; break; }
+    if (!has_digit)
+        return text;
+    return agi::Time(text).GetAssFormatted();
+}
+
 std::string NewAssJson() {
     Doc d;
     d.eol = "\n";

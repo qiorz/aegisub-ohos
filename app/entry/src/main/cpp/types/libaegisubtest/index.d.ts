@@ -19,5 +19,8 @@ export const loadAss: (path: string) => string;
 /** A new v4.00+ document with one default Dialogue line, as JSON. */
 export const newAss: () => string;
 
+/** Canonicalize a user-entered ASS time (e.g. "1:02.5" -> "0:00:01.02"). */
+export const normalizeTime: (text: string) => string;
+
 /** Human-readable build identification. */
 export const version: () => string;

@@ -111,8 +111,19 @@ struct Editor {
   }
 
   private selectEvent(i: number): void {
+    if (this.selected >= 0 && this.selected !== i) {
+      this.applyEdit();
+    }
     this.selected = i;
     this.loadSelected();
+  }
+
+  /** ASS is line-oriented; a real newline in TextArea must become \N. */
+  private sanitizeText(t: string): string {
+    let out = t.split('\r\n').join('\\N');
+    out = out.split('\r').join('\\N');
+    out = out.split('\n').join('\\N');
+    return out;
   }
 
   private applyEdit(): void {
@@ -122,16 +133,19 @@ struct Editor {
     const e: AssEvent = this.events[this.selected];
     const f: string[] = e.fields.slice();
     if (this.startIndex >= 0 && this.startIndex < f.length) {
-      f[this.startIndex] = this.editStart.trim();
+      this.editStart = aegisub.normalizeTime(this.editStart.trim());
+      f[this.startIndex] = this.editStart;
     }
     if (this.endIndex >= 0 && this.endIndex < f.length) {
-      f[this.endIndex] = this.editEnd.trim();
+      this.editEnd = aegisub.normalizeTime(this.editEnd.trim());
+      f[this.endIndex] = this.editEnd;
     }
     const si = this.styleIndex();
     if (si >= 0 && si < f.length) {
       f[si] = this.editStyle.trim();
     }
     if (this.textIndex >= 0 && this.textIndex < f.length) {
+      this.editText = this.sanitizeText(this.editText);
       f[this.textIndex] = this.editText;
     }
     const updated: AssEvent = {
@@ -227,6 +241,9 @@ struct Editor {
     if (this.assPath === '') {
       this.status = '没有可保存的文件路径';
       return false;
+    }
+    if (this.selected >= 0 && this.selected < this.events.length) {
+      this.applyEdit();
     }
     try {
       this.writeText(this.assPath, this.serialize());
