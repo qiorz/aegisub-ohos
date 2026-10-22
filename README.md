@@ -1,7 +1,7 @@
 # Aegisub → HarmonyOS (OHOS) 移植
 
-把 [Aegisub](https://github.com/Aegisub/Aegisub)（字幕编辑/打轴工具）移植到 HarmonyOS / OpenHarmony，
-产出可安装的 HAP。
+把 [Aegisub](https://github.com/TypesettingTools/Aegisub)（字幕编辑/打轴工具）移植到 HarmonyOS / OpenHarmony，
+产出可安装的 HAP。上游已由 `Aegisub/Aegisub` 迁移到 `TypesettingTools/Aegisub`。
 
 ## 目录
 
@@ -22,6 +22,21 @@
 
 ## 当前状态
 
-骨架已就绪，尚未拉取源码、尚未做依赖可行性评估。
-最大的未知项是 **wxWidgets 在 OHOS 上的可编译性**（Aegisub 的 GUI 层强依赖 wx），
-其次是 Boost（可裁剪）、luajit（Aegisub 自动化脚本）、以及自带的 libass/ffmpeg 能否复用 HandBrake 已编好的 AArch64 版本。
+- **2026-10-22**：v3.5.1 核心库 `libaegisub` 交叉编译通过；
+  全静态 `gtest-main` 在 qemu-aarch64 下 **371/371 测试通过**。
+  详见 [进度-2026-10-22](docs/进度-2026-10-22.md)。
+- 当前是 **core-only**（`-Dcore_only=true`）：不含 GUI、音频、视频、fontconfig/libass。
+- 真机未验证；签名仍缺 AGC 的 `.cer` / `.p7b`。
+- 下一步最大未知项仍是 **GUI 路线**（ArkUI 重写 vs wxWidgets OHOS 后端）。
+
+### 复现入口
+
+```bash
+source scripts/env.sh
+bash scripts/fetch-aegisub.sh
+bash scripts/fetch-deps-ohos.sh
+bash scripts/build-all-deps.sh
+bash scripts/apply-patches.sh
+bash scripts/build-libaegisub-ohos.sh --wipe
+bash scripts/run-tests-qemu.sh
+```

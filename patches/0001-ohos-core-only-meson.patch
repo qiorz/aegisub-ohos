@@ -1,0 +1,179 @@
+diff --git a/meson.build b/meson.build
+index ce42591..780daf0 100644
+--- a/meson.build
++++ b/meson.build
+@@ -44,6 +44,9 @@ endif
+ cxx = meson.get_compiler('cpp')
+ cc = meson.get_compiler('c')
+ 
++# OHOS port: core-only build (libaegisub + tests), no GUI.
++core_only = get_option('core_only')
++
+ if host_machine.system() == 'windows'
+     # The CRT must be linked dynamically (the default): the automation code
+     # assumes the app and LuaJIT's ffi.C use the same CRT, which doesn't hold
+@@ -130,7 +133,7 @@ if host_machine.system() == 'darwin'
+     add_project_arguments('-DGL_SILENCE_DEPRECATION', language: 'cpp')
+     # meson neither supports objcpp_std nor inherits cpp_std https://github.com/mesonbuild/meson/issues/5495
+     add_project_arguments('-std=c++20', language: 'objcpp')
+-elif host_machine.system() != 'windows'
++elif host_machine.system() != 'windows' and not core_only
+     conf.set('WITH_FONTCONFIG', 1)
+     deps += dependency('fontconfig')
+ endif
+@@ -140,15 +143,17 @@ deps += cc.find_library('dl', required: false)
+ 
+ deps += dependency('iconv', fallback: ['iconv', 'libiconv_dep'])
+ 
+-libass_dep = dependency('libass', version: '>=0.9.7',
+-                        fallback: ['libass', 'libass_dep'],
+-                        default_options: [
+-                            'test=disabled',
+-                            'compare=disabled',
+-                            'freetype2:png=disabled',
+-                            'harfbuzz:png=disabled',
+-                        ])
+-deps += libass_dep
++if not core_only
++    libass_dep = dependency('libass', version: '>=0.9.7',
++                            fallback: ['libass', 'libass_dep'],
++                            default_options: [
++                                'test=disabled',
++                                'compare=disabled',
++                                'freetype2:png=disabled',
++                                'harfbuzz:png=disabled',
++                            ])
++    deps += libass_dep
++endif
+ 
+ boost_static = meson.version().version_compare('>=0.63.0') and get_option('prefer_static')    # boost dependencies do not respect prefer_static https://github.com/mesonbuild/meson/issues/15458
+ boost_modules = ['chrono', 'locale']
+@@ -198,6 +203,7 @@ endif
+ zlib_dep = dependency('zlib')
+ deps += zlib_dep
+ 
++if not core_only
+ use_bundled_wx = force_all_fallbacks or force_fallback_for.contains('wxWidgets')
+ if not use_bundled_wx
+     wx_dep = dependency('wxWidgets', version: '>=' + get_option('wx_version'),
+@@ -331,10 +337,12 @@ else
+ 
+     conf.set('WITH_INTERNAL_WXWIDGETS', 1)
+ endif
++endif # not core_only
+ 
+ deps += dependency('icu-uc', version: '>=4.8.1.1')
+ deps += dependency('icu-i18n', version: '>=4.8.1.1')
+ 
++if not core_only
+ check_deps = [
+     # audio, in order of precedence
+     ['libpulse', [], 'PulseAudio', [], []],
+@@ -456,9 +464,17 @@ if get_option('enable_update_checker')
+     deps += dependency('libcurl', allow_fallback: true, default_options: curl_options)
+ endif
+ 
++endif # not core_only
++
+ luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'),
+                     allow_fallback: false, method: 'pkg-config')
+ if luajit.found() and luajit.type_name() != 'internal'
++    if meson.is_cross_build()
++        # OHOS port: cannot execute target binaries at configure time. The
++        # system LuaJIT is built by us with LUAJIT_ENABLE_LUA52COMPAT, so trust
++        # pkg-config instead of running the 5.2-compat probe under qemu.
++        deps += luajit
++    else
+     luajit_test = cc.run(files('tests/tests/luajit_52.c'), dependencies: luajit)
+ 
+     if luajit_test.returncode() != 0
+@@ -471,6 +487,7 @@ if luajit.found() and luajit.type_name() != 'internal'
+     else
+         deps += luajit
+     endif
++    endif
+ endif
+ 
+ if not luajit.found()
+@@ -486,6 +503,7 @@ endif
+ 
+ deps += subproject('luabins').get_variable('luabins_dep')
+ 
++if not core_only
+ dep_gl = dependency('gl', required: false)
+ if not dep_gl.found()
+     if host_machine.system() == 'windows'
+@@ -509,6 +527,7 @@ if not dep_gl.found()
+ endif
+ 
+ deps += dep_gl
++endif # not core_only
+ 
+ if not get_option('csri').disabled() and host_machine.system() == 'windows'
+     conf.set('WITH_CSRI', 1)
+@@ -562,14 +581,17 @@ endif
+ 
+ subdir('automation')
+ subdir('libaegisub')
++if not core_only
+ subdir('packages')
+ subdir('po')
+ subdir('src')
++endif
+ if get_option('tests')
+     subdir('tests')
+     subdir('automation/tests')
+ endif
+ 
++if not core_only
+ aegisub_cpp_pch = ['src/include/agi_pre.h']
+ aegisub_c_pch = ['src/include/agi_pre_c.h']
+ 
+@@ -594,3 +616,4 @@ aegisub = executable('aegisub', aegisub_src, version_h, libresrc_headers, aegisu
+                      install_dir: bindir,
+                      dependencies: deps,
+                      win_subsystem: 'windows')
++endif # not core_only
+diff --git a/meson_options.txt b/meson_options.txt
+index a6c6287..f22fa63 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -30,3 +30,7 @@ option('build_osx_bundle', type: 'boolean', value: false, description: 'Package
+ option('macos_deployment_target', type: 'string', value: '13.0', description: 'Minimum supported macOS version')
+ 
+ option('tests', type: 'boolean', value: true, description: 'Build tests')
++
++# OHOS port: build only libaegisub + tests, skip the wxWidgets GUI and all
++# audio/video backends. Used to bring the core library up before tackling GUI.
++option('core_only', type: 'boolean', value: false, description: 'Build only libaegisub and tests (no GUI, no audio/video backends)')
+diff --git a/tests/meson.build b/tests/meson.build
+index 18939e7..3b6d623 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -1,4 +1,4 @@
+-gtest_ver = '>=1.14.0'
++gtest_ver = '>=1.12.0'
+ gtest_dep = dependency('gtest', 
+                        fallback : ['gtest', 'gtest_dep'], 
+                        version : gtest_ver)
+@@ -31,7 +31,6 @@ tests_src = [
+     'tests/inline_string_encoding.cpp',
+     'tests/karaoke_matcher.cpp',
+     'tests/keyframe.cpp',
+-    'tests/language_match.cpp',
+     'tests/line_iterator.cpp',
+     'tests/line_wrap.cpp',
+     'tests/lua_lfs.cpp',
+@@ -52,6 +51,12 @@ tests_src = [
+     'tests/ycbcr.cpp',
+ ]
+ 
++# OHOS core-only build does not compile src/ (GUI), so this test's
++# dependency on src/language_match.h + wx/intl.h is excluded.
++if not core_only
++    tests_src = tests_src + ['tests/language_match.cpp']
++endif
++
+ tests_inc = include_directories('support')
+ 
+ tests_args = []

@@ -1,0 +1,110 @@
+diff --git a/libaegisub/audio/provider_convert.cpp b/libaegisub/audio/provider_convert.cpp
+index f7ae560..2675718 100644
+--- a/libaegisub/audio/provider_convert.cpp
++++ b/libaegisub/audio/provider_convert.cpp
+@@ -29,17 +29,17 @@ using namespace agi;
+ /// Anything integral -> 16 bit signed machine-endian audio converter
+ namespace {
+ int64_t AssembleSample(std::span<uint8_t> data) {
+-	const auto accumulate_bytes = [](auto view) {
+-		return std::accumulate(view.begin(), view.end(), int64_t{0},
+-			[](int64_t acc, uint8_t value) {
+-				return (acc << 8) + value;
+-			});
+-	};
+-
+-	if (endian::IsBigEndian)
+-		return accumulate_bytes(data);
+-
+-	return accumulate_bytes(data | std::views::reverse);
++	// OHOS libc++ 15 is built with _LIBCPP_HAS_NO_INCOMPLETE_RANGES, so
++	// std::views is unavailable. Accumulate manually instead.
++	int64_t acc = 0;
++	if (endian::IsBigEndian) {
++		for (uint8_t value : data)
++			acc = (acc << 8) + value;
++	} else {
++		for (size_t i = data.size(); i > 0; --i)
++			acc = (acc << 8) + data[i - 1];
++	}
++	return acc;
+ }
+ 
+ template<class Target>
+diff --git a/libaegisub/common/charset_conv.cpp b/libaegisub/common/charset_conv.cpp
+index 7837efc..289391b 100644
+--- a/libaegisub/common/charset_conv.cpp
++++ b/libaegisub/common/charset_conv.cpp
+@@ -22,6 +22,7 @@
+ #include <cassert>
+ #include <cerrno>
+ #include <cstdint>
++#include <cstring>
+ 
+ // Check if we can use advanced fallback capabilities added in GNU's iconv
+ // implementation
+@@ -69,6 +70,19 @@ namespace {
+ 		return name;
+ 	}
+ 
++	/// OHOS: the system charset is UTF-8 and wchar_t is 4-byte Unicode, but
++	/// musl reports the C locale as ASCII and GNU libiconv is built without
++	/// the WCHAR_T/ISO-10646 path here. Normalize both explicitly.
++	const char *normalize_encoding(const char *name) {
++#if defined(__OHOS__)
++		if (!name || !*name)
++			return "UTF-8";
++		if (!strcmp(name, "wchar_t") || !strcmp(name, "WCHAR_T"))
++			return "UTF-32LE";
++#endif
++		return get_real_encoding_name(name);
++	}
++
+ 	size_t get_bom_size(Iconv& cd) {
+ 		// Most (but not all) iconv implementations automatically insert a BOM
+ 		// at the beginning of text converted to UTF-8, UTF-16 and UTF-32, but
+@@ -122,11 +136,11 @@ namespace {
+ 		// subst is not used here because POSIX doesn't let you disable substitution
+ 		ConverterImpl(bool, const char* sourceEncoding, const char* destEncoding)
+ 		{
+-			const char *dstEnc = get_real_encoding_name(destEncoding);
++			const char *dstEnc = normalize_encoding(destEncoding);
+ 			cd = Iconv("utf-8", dstEnc);
+ 
+ 			bomSize = get_bom_size(cd);
+-			cd = Iconv(get_real_encoding_name(sourceEncoding), dstEnc);
++			cd = Iconv(normalize_encoding(sourceEncoding), dstEnc);
+ 		}
+ 
+ 		size_t Convert(const char** inbuf, size_t* inbytesleft, char** outbuf, size_t* outbytesleft) {
+@@ -173,7 +187,7 @@ namespace {
+ 	public:
+ 		ConverterImpl(bool subst, const char* sourceEncoding, const char* destEncoding)
+ 		{
+-			const char *dstEnc = get_real_encoding_name(destEncoding);
++			const char *dstEnc = normalize_encoding(destEncoding);
+ 			cd = Iconv("utf-8", dstEnc);
+ 
+ 			bomSize = get_bom_size(cd);
+@@ -191,7 +205,7 @@ namespace {
+ 
+ 			invalidRepSize = 4 - dstLen;
+ 
+-			cd = Iconv(get_real_encoding_name(sourceEncoding), dstEnc);
++			cd = Iconv(normalize_encoding(sourceEncoding), dstEnc);
+ 
+ 			if (subst) {
+ 				data = this;
+diff --git a/libaegisub/common/ycbcr.cpp b/libaegisub/common/ycbcr.cpp
+index a737615..a5a1af9 100644
+--- a/libaegisub/common/ycbcr.cpp
++++ b/libaegisub/common/ycbcr.cpp
+@@ -61,7 +61,7 @@ header_variant parse_ycbcr_header(std::string const& matrix) {
+ 	if (CM == ycbcr_matrix::Unspecified || CR == ycbcr_range::Unspecified)
+ 		return header_invalid{};
+ 
+-	return header_colorspace(CM, CR);
++	return header_colorspace{CM, CR};
+ }
+ 
+ }
