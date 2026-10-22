@@ -9,7 +9,7 @@
  */
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
-import { router, promptAction } from '@kit.ArkUI';
+import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { image } from '@kit.ImageKit';
 import { media } from '@kit.MediaKit';
@@ -17,7 +17,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.2';
 
 interface AssEvent {
   kind: string;
@@ -156,6 +156,8 @@ struct Editor {
 
   private header: string = '';
   private fontConfigPath: string = '';
+  private logLines: string[] = [];
+  private fontsReady: boolean = false;
   private footer: string = '';
   private eol: string = '\n';
   private bom: boolean = false;
@@ -169,7 +171,55 @@ struct Editor {
   private lastAutoRender: number = 0;
 
   aboutToAppear(): void {
+    this.addLog(`app start v${APP_VERSION}`);
     this.newAss();
+  }
+
+  private addLog(msg: string): void {
+    const d = new Date();
+    const p = (n: number): string => n < 10 ? `0${n}` : `${n}`;
+    const ts = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+      `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    this.logLines.push(`[${ts}] ${msg}`);
+    if (this.logLines.length > 300) {
+      this.logLines.shift();
+    }
+    hilog.info(0xFF01, TAG, '%{public}s', msg);
+  }
+
+  async exportLog(): Promise<void> {
+    this.addLog('exportLog requested');
+    try {
+      const dir = `${this.ctx.filesDir}/logs`;
+      try {
+        fs.mkdirSync(dir, true);
+      } catch (e) {
+        // exists
+      }
+      const path = `${dir}/aegisub-${stamp()}.log`;
+      const text = `Aegisub OHOS v${APP_VERSION}\n` +
+        `time: ${new Date().toISOString()}\n` +
+        `file: ${this.fileName}\npath: ${this.assPath}\n` +
+        `hasDoc: ${this.hasDoc}, dirty: ${this.dirty}, ` +
+        `events: ${this.events.length}, styles: ${this.styleEntries.length}\n` +
+        `status: ${this.status}\n` +
+        '---- log ----\n' + this.logLines.join('\n') + '\n';
+      this.writeText(path, text);
+      const opt = new picker.DocumentSaveOptions();
+      opt.newFileNames = [`aegisub-${stamp()}.log`];
+      opt.fileSuffixChoices = ['.log', '.txt'];
+      const doc = new picker.DocumentViewPicker(this.ctx);
+      const uris = await doc.save(opt);
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      const n = this.writeToUri(path, uris[0]);
+      this.status = `日志已导出：${n} 字节 → ${uris[0]}`;
+      promptAction.showToast({ message: '日志已导出', duration: 2000 });
+    } catch (e) {
+      this.status = `日志导出失败：${JSON.stringify(e)}`;
+      this.addLog(`exportLog failed: ${JSON.stringify(e)}`);
+    }
   }
 
   private styleIndex(): number {
@@ -333,6 +383,12 @@ struct Editor {
   }
 
   private loadFonts(): void {
+    try {
+      this.ensureFont();
+    } catch (e) {
+      this.fontListStatus = `字体解压失败：${JSON.stringify(e)}`;
+      return;
+    }
     const cfg = this.ensureFontConfig();
     if (cfg === '') {
       this.fontListStatus = 'fontconfig 配置不可用';
@@ -514,28 +570,43 @@ struct Editor {
   }
 
   private extractRawFont(asset: string, dest: string): void {
+    const bytes: Uint8Array = this.ctx.resourceManager.getRawFileContentSync(asset);
+    const length = bytes.byteLength;
     try {
-      if (fs.accessSync(dest)) {
+      if (fs.statSync(dest).size === length) {
         return;
       }
     } catch (e) {
       // not extracted yet
     }
-    const bytes: Uint8Array = this.ctx.resourceManager.getRawFileContentSync(asset);
     const f = fs.openSync(dest,
       fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
     try {
-      const buffer: ArrayBuffer = bytes.buffer.slice(
-        bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      fs.writeSync(f.fd, buffer);
+      let offset = 0;
+      while (offset < length) {
+        const chunk = new ArrayBuffer(length - offset);
+        new Uint8Array(chunk).set(bytes.subarray(offset));
+        const written: number = fs.writeSync(f.fd, chunk);
+        if (written <= 0) {
+          throw new Error(`font write stalled at ${offset}/${length}`);
+        }
+        offset += written;
+      }
     } finally {
       fs.closeSync(f);
+    }
+    if (fs.statSync(dest).size !== length) {
+      fs.unlinkSync(dest);
+      throw new Error(`font size mismatch: ${dest}`);
     }
   }
 
   private ensureFont(): string {
     const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
     const dest = `${dir}/DejaVuSans.ttf`;
+    if (this.fontsReady) {
+      return dest;
+    }
     try {
       fs.mkdirSync(dir, true);
     } catch (e) {
@@ -545,6 +616,7 @@ struct Editor {
     // CJK fallback: libass/fontconfig picks this for Chinese glyphs.
     this.extractRawFont('fonts/DroidSansFallbackFull.ttf',
       `${dir}/DroidSansFallbackFull.ttf`);
+    this.fontsReady = true;
     return dest;
   }
 
@@ -595,6 +667,7 @@ struct Editor {
         this.assPath, timeMs, 640, 360, font, fontConfig);
       const opts: image.InitializationOptions = {
         size: { width: frame.width, height: frame.height },
+        srcPixelFormat: image.PixelMapFormat.RGBA_8888,
         pixelFormat: image.PixelMapFormat.RGBA_8888,
         alphaType: image.AlphaType.PREMUL,
         editable: false
@@ -604,6 +677,7 @@ struct Editor {
         `${(timeMs / 1000).toFixed(2)}s`;
     } catch (e) {
       this.renderStatus = `样式渲染失败：${JSON.stringify(e)}`;
+      this.addLog(`renderAss failed: ${JSON.stringify(e)}`);
     } finally {
       this.renderBusy = false;
     }
@@ -659,9 +733,11 @@ struct Editor {
       this.subtitleImage = undefined;
       this.autoStyled = false;
       this.videoStatus = '已选择；点播放预览字幕';
+      this.addLog(`pickVideo ${name} -> ${dest}`);
       this.updateActiveText();
     } catch (e) {
       this.videoStatus = `选择视频失败：${JSON.stringify(e)}`;
+      this.addLog(`pickVideo failed: ${JSON.stringify(e)}`);
     }
   }
 
@@ -751,8 +827,10 @@ struct Editor {
       this.audioStatus = '已加载；播放或用 ±1s 定位';
       this.currentMs = 0;
       this.audioDuration = 0;
+      this.addLog(`pickAudio ${name}, waveform ${this.waveformPeaks.length} buckets`);
     } catch (e) {
       this.audioStatus = `选择音频失败：${JSON.stringify(e)}`;
+      this.addLog(`pickAudio failed: ${JSON.stringify(e)}`);
     }
   }
 
@@ -1195,9 +1273,11 @@ struct Editor {
       this.writeText(this.assPath, this.serialize());
       this.dirty = false;
       this.status = `已保存：${this.assPath}（旧版 .bak）`;
+      this.addLog(`save ${this.assPath}, ${this.events.length} events`);
       return true;
     } catch (e) {
       this.status = `保存失败：${JSON.stringify(e)}`;
+      this.addLog(`save failed: ${JSON.stringify(e)}`);
       return false;
     }
   }
@@ -1231,6 +1311,7 @@ struct Editor {
       const d: AssDoc = JSON.parse(raw) as AssDoc;
       if (!d.ok) {
         this.status = `解析失败：${d.error ?? 'unknown'}`;
+        this.addLog(`openAss parse failed: ${d.error ?? 'unknown'}`);
         return;
       }
       this.assPath = dest;
@@ -1240,8 +1321,10 @@ struct Editor {
       this.status = isSrt
         ? `已导入 SRT ${name}，共 ${this.events.length} 行（转成 ASS）`
         : `已打开 ${name}，共 ${this.events.length} 行`;
+      this.addLog(`open ${name} -> ${dest}, ${this.events.length} events`);
     } catch (e) {
       this.status = `打开失败：${JSON.stringify(e)}`;
+      this.addLog(`openAss failed: ${JSON.stringify(e)}`);
       hilog.error(0xFF01, TAG, 'openAss failed: %{public}s', `${e}`);
     }
   }
@@ -1260,8 +1343,10 @@ struct Editor {
       this.applyDoc(d);
       this.resetHistory();
       this.status = '已新建 v4.00+ 字幕';
+      this.addLog(`newAss ${this.assPath}`);
     } catch (e) {
       this.status = `新建失败：${JSON.stringify(e)}`;
+      this.addLog(`newAss failed: ${JSON.stringify(e)}`);
     }
   }
 
@@ -1283,6 +1368,7 @@ struct Editor {
       }
       this.writeToUri(this.assPath, uris[0]);
       this.status = `已导出：${uris[0]}`;
+      this.addLog(`exportAss ${uris[0]}`);
       promptAction.showToast({ message: '字幕已导出', duration: 2000 });
     } catch (e) {
       this.status = `导出失败：${JSON.stringify(e)}`;
@@ -1333,6 +1419,7 @@ struct Editor {
       }
       this.writeToUri(path, uris[0]);
       this.status = `已导出 SRT：${uris[0]}`;
+      this.addLog(`exportSrt ${uris[0]}`);
       promptAction.showToast({ message: 'SRT 已导出', duration: 2000 });
     } catch (e) {
       this.status = `SRT 导出失败：${JSON.stringify(e)}`;
@@ -1371,6 +1458,7 @@ struct Editor {
 
   onPageHide(): void {
     if (this.hasDoc && this.dirty) {
+      this.addLog('onPageHide autosave');
       this.saveToSandbox();
     }
   }
@@ -1465,9 +1553,9 @@ struct Editor {
           .enabled(this.hasDoc)
           .backgroundColor(this.showAudio ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleAudio(); })
-        Button('测试')
+        Button('日志')
           .layoutWeight(1)
-          .onClick(() => { router.pushUrl({ url: 'pages/Index' }); })
+          .onClick(() => { this.exportLog(); })
       }
       .width('100%')
 
@@ -1570,20 +1658,14 @@ struct Editor {
                 .onError(() => {
                   this.videoStatus = '视频播放失败（格式或解码器不支持）';
                 })
-              if (this.subtitleImage !== undefined) {
-                Image(this.subtitleImage)
-                  .width('100%')
-                  .height('100%')
-                  .objectFit(ImageFit.Contain)
-              } else {
-                Text(this.activeText)
-                  .fontSize(15)
-                  .fontColor('#FFFFFF')
-                  .backgroundColor('#B0000000')
-                  .width('100%')
-                  .padding(6)
-                  .textAlign(TextAlign.Center)
-              }
+              Text(this.activeText)
+                .fontSize(15)
+                .fontColor('#FFFFFF')
+                .backgroundColor('#B0000000')
+                .width('100%')
+                .padding(6)
+                .textAlign(TextAlign.Center)
+                .hitTestBehavior(HitTestMode.Transparent)
             }
             .width('100%')
             .aspectRatio(16.0 / 9.0)
@@ -1598,6 +1680,16 @@ struct Editor {
             .justifyContent(FlexAlign.Center)
             .backgroundColor('#FFFFFF')
             .borderRadius(8)
+          }
+
+          if (this.subtitleImage !== undefined) {
+            Text('样式渲染预览（外置）').fontSize(9).fontColor('#888888').width('100%')
+            Image(this.subtitleImage)
+              .width('100%')
+              .aspectRatio(16.0 / 9.0)
+              .constraintSize({ maxWidth: 640 })
+              .objectFit(ImageFit.Contain)
+              .backgroundColor('#202020')
           }
 
           Row({ space: 6 }) {
