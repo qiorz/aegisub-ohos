@@ -32,6 +32,17 @@ export interface WaveformResult {
   error?: string;
 }
 
+export interface VideoProbeResult {
+  ok: boolean;
+  fps?: number;
+  width?: number;
+  height?: number;
+  error?: string;
+}
+
+/** Read MP4/MOV average fps (mdhd/stts); MKV/TS return ok=false. */
+export const videoFps: (path: string) => string;
+
 /** Compute PCM WAV peak buckets (0..1) for a waveform display. */
 export const waveform: (path: string, buckets?: number) => string;
 

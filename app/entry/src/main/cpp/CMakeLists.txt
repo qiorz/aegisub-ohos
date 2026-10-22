@@ -23,6 +23,7 @@ add_library(aegisubtest SHARED
     ass_lite.cpp
     ass_render.cpp
     waveform.cpp
+    video_probe.cpp
     test_runner.cpp
     ${AEGISUB_SRC}/tests/support/util.cpp
     ${TEST_SOURCES})

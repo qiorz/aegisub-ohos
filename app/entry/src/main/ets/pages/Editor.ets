@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.6';
+const APP_VERSION = '0.1.7';
 
 interface AssEvent {
   kind: string;
@@ -34,6 +34,14 @@ interface WaveformResult {
   sampleRate?: number;
   channels?: number;
   peaks?: number[];
+  error?: string;
+}
+
+interface VideoProbeResult {
+  ok: boolean;
+  fps?: number;
+  width?: number;
+  height?: number;
   error?: string;
 }
 
@@ -144,6 +152,8 @@ struct Editor {
   @State videoStatus: string = '选择 MP4/MKV/TS 预览字幕';
   @State currentMs: number = 0;
   @State videoDuration: number = 0;
+  @State videoFps: number = 25;
+  @State videoFpsSource: string = '默认';
   @State activeText: string = '';
   @State subtitleImage: image.PixelMap | undefined = undefined;
   @State renderStatus: string = '';
@@ -738,6 +748,21 @@ struct Editor {
       const ext = dot > 0 ? name.substring(dot) : '.mp4';
       const dest = `${dir}/video-${stamp()}${ext}`;
       this.copyTo(uris[0], dest);
+      this.videoFps = 25;
+      this.videoFpsSource = '默认';
+      try {
+        const probeRaw: string = aegisub.videoFps(dest);
+        const probe: VideoProbeResult = JSON.parse(probeRaw) as VideoProbeResult;
+        if (probe.ok && probe.fps !== undefined && probe.fps > 1) {
+          this.videoFps = probe.fps;
+          this.videoFpsSource = '读取';
+        } else {
+          this.videoFpsSource = '未识别，默认';
+        }
+      } catch (e) {
+        this.videoFpsSource = '未识别，默认';
+      }
+      this.addLog(`videoFps ${this.videoFps.toFixed(3)} (${this.videoFpsSource})`);
       try {
         this.videoController.stop();
       } catch (e) {
@@ -893,6 +918,33 @@ struct Editor {
       }
     }
     this.status = '当前播放位置没有 Dialogue 行';
+  }
+
+  private seekVideoTo(ms: number): void {
+    if (this.videoUri === '') {
+      return;
+    }
+    let target = Math.max(0, ms);
+    if (this.videoDuration > 0) {
+      target = Math.min(target, this.videoDuration * 1000);
+    }
+    try {
+      this.videoController.setCurrentTime(target / 1000);
+      this.currentMs = target;
+      this.pendingSeekMs = -1;
+      this.updateActiveText();
+      this.videoStatus = `定位 ${(target / 1000).toFixed(3)}s`;
+    } catch (e) {
+      this.videoStatus = `定位失败：${JSON.stringify(e)}`;
+    }
+  }
+
+  private stepVideoFrames(frames: number): void {
+    this.seekVideoTo(this.currentMs + frames * 1000 / this.videoFps);
+  }
+
+  private stepVideoMs(ms: number): void {
+    this.seekVideoTo(this.currentMs + ms);
   }
 
   private backToVideo(): void {
@@ -1681,6 +1733,35 @@ struct Editor {
           }
           .width('100%')
 
+          Row({ space: 4 }) {
+            Button('-1帧').layoutWeight(1).fontSize(10)
+              .enabled(this.videoUri !== '')
+              .onClick(() => { this.stepVideoFrames(-1); })
+            Button('+1帧').layoutWeight(1).fontSize(10)
+              .enabled(this.videoUri !== '')
+              .onClick(() => { this.stepVideoFrames(1); })
+            Button('-100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.videoUri !== '')
+              .onClick(() => { this.stepVideoMs(-100); })
+            Button('+100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.videoUri !== '')
+              .onClick(() => { this.stepVideoMs(100); })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Button('设为起点').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0 && this.videoUri !== '')
+              .onClick(() => { this.setBoundary(true); })
+            Button('设为终点').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0 && this.videoUri !== '')
+              .onClick(() => { this.setBoundary(false); })
+            Text(`FPS ${this.videoFps.toFixed(3)} (${this.videoFpsSource}) · 帧 ` +
+              `${Math.floor(this.currentMs * this.videoFps / 1000)}`)
+              .fontSize(9).fontColor('#666666').layoutWeight(1)
+          }
+          .width('100%')
+
           Row({ space: 6 }) {
             Button('跳到选中行').fontSize(11)
               .enabled(this.selected >= 0 && this.videoUri !== '')
@@ -1688,7 +1769,7 @@ struct Editor {
             Button('样式渲染').fontSize(11)
               .enabled(this.hasDoc)
               .onClick(() => { this.renderStyled(); })
-            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
+            Text(`当前 ${(this.currentMs / 1000).toFixed(3)}s / ${this.videoDuration}s`)
               .fontSize(10).fontColor('#666666').layoutWeight(1)
           }
           .width('100%')
