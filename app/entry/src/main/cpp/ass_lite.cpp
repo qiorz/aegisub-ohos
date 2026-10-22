@@ -544,3 +544,7 @@ std::string LoadSrtJson(const std::string& path) {
     }
     return to_json(d);
 }
+
+int AssTimeToMs(const std::string& text) {
+    return static_cast<int>(agi::Time(text));
+}

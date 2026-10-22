@@ -144,6 +144,20 @@ napi_value SrtTime(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value TimeToMs(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char text[256] = {0};
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], text, sizeof text, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "timeToMs(text: string) requires a string");
+        return nullptr;
+    }
+    napi_value result;
+    napi_create_int32(env, AssTimeToMs(text), &result);
+    return result;
+}
+
 napi_value NormalizeTime(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -166,6 +180,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"newAss", nullptr, NewAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"loadSrt", nullptr, LoadSrt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"srtTime", nullptr, SrtTime, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"timeToMs", nullptr, TimeToMs, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

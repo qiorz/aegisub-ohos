@@ -28,5 +28,8 @@ export const normalizeTime: (text: string) => string;
 /** Format a time as SRT (e.g. "0:00:01.00" -> "00:00:01,000"). */
 export const srtTime: (text: string) => string;
 
+/** Convert an ASS time to milliseconds (for preview sync). */
+export const timeToMs: (text: string) => number;
+
 /** Human-readable build identification. */
 export const version: () => string;

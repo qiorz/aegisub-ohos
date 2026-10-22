@@ -8,7 +8,7 @@
  * pages/Index for diagnostics.
  */
 import { common } from '@kit.AbilityKit';
-import { fileIo as fs, picker } from '@kit.CoreFileKit';
+import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import aegisub from 'libaegisubtest.so';
@@ -92,6 +92,14 @@ struct Editor {
   @State dirty: boolean = false;
   @State canUndo: boolean = false;
   @State canRedo: boolean = false;
+  @State showVideo: boolean = false;
+  @State videoPath: string = '';
+  @State videoUri: string = '';
+  @State videoName: string = '';
+  @State videoStatus: string = '选择 MP4/MKV/TS 预览字幕';
+  @State currentMs: number = 0;
+  @State videoDuration: number = 0;
+  @State activeText: string = '';
 
   private header: string = '';
   private footer: string = '';
@@ -101,6 +109,7 @@ struct Editor {
   private ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
   private undoStack: EditorSnapshot[] = [];
   private redoStack: EditorSnapshot[] = [];
+  private videoController: VideoController = new VideoController();
 
   aboutToAppear(): void {
     this.newAss();
@@ -262,8 +271,92 @@ struct Editor {
 
   private toggleStyles(): void {
     this.showStyles = !this.showStyles;
-    if (this.showStyles && this.styleEntries.length > 0 && this.styleSelected < 0) {
-      this.selectStyle(0);
+    if (this.showStyles) {
+      this.showVideo = false;
+      if (this.styleEntries.length > 0 && this.styleSelected < 0) {
+        this.selectStyle(0);
+      }
+    }
+  }
+
+  private toggleVideo(): void {
+    this.showVideo = !this.showVideo;
+    if (this.showVideo) {
+      this.showStyles = false;
+      this.updateActiveText();
+    }
+  }
+
+  private updateActiveText(): void {
+    let text = '';
+    for (const e of this.events) {
+      if (e.kind.toLowerCase() !== 'dialogue') {
+        continue;
+      }
+      if (this.currentMs >= e.startMs && this.currentMs < e.endMs) {
+        text = this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '';
+        break;
+      }
+    }
+    text = text.split('\N').join('\n');
+    text = text.split('\n').join('\n');
+    this.activeText = text;
+  }
+
+  async pickVideo(): Promise<void> {
+    try {
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['.mp4', '.mkv', '.ts', '.m4v'];
+      const doc = new picker.DocumentViewPicker(this.ctx);
+      const uris = await doc.select(opt);
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      let name = uris[0].substring(uris[0].lastIndexOf('/') + 1);
+      try {
+        name = decodeURIComponent(name);
+      } catch (e) {
+        // keep raw
+      }
+      const dir = `${this.ctx.filesDir}/video`;
+      try {
+        fs.mkdirSync(dir, true);
+      } catch (e) {
+        // exists
+      }
+      const dot = name.lastIndexOf('.');
+      const ext = dot > 0 ? name.substring(dot) : '.mp4';
+      const dest = `${dir}/video-${stamp()}${ext}`;
+      this.copyTo(uris[0], dest);
+      try {
+        this.videoController.stop();
+      } catch (e) {
+        // not prepared yet
+      }
+      this.videoPath = dest;
+      this.videoUri = fileUri.getUriFromPath(dest);
+      this.videoName = name;
+      this.currentMs = 0;
+      this.videoStatus = '已选择；点播放预览字幕';
+      this.updateActiveText();
+    } catch (e) {
+      this.videoStatus = `选择视频失败：${JSON.stringify(e)}`;
+    }
+  }
+
+  private seekSelected(): void {
+    if (this.selected < 0 || this.selected >= this.events.length || this.videoUri === '') {
+      return;
+    }
+    const e = this.events[this.selected];
+    try {
+      this.videoController.setCurrentTime(e.startMs / 1000);
+      this.currentMs = e.startMs;
+      this.updateActiveText();
+      this.videoStatus = `跳到 ${(e.startMs / 1000).toFixed(2)}s`;
+    } catch (ex) {
+      this.videoStatus = `跳转失败：${JSON.stringify(ex)}`;
     }
   }
 
@@ -307,6 +400,7 @@ struct Editor {
     if (this.styleSelected >= 0) {
       this.selectStyle(this.styleSelected);
     }
+    this.updateActiveText();
   }
 
   private loadSelected(): void {
@@ -378,8 +472,10 @@ struct Editor {
     const updated: AssEvent = {
       kind: e.kind,
       fields: f,
-      startMs: e.startMs,
-      endMs: e.endMs
+      startMs: this.startIndex >= 0 && this.startIndex < f.length
+        ? aegisub.timeToMs(f[this.startIndex]) : e.startMs,
+      endMs: this.endIndex >= 0 && this.endIndex < f.length
+        ? aegisub.timeToMs(f[this.endIndex]) : e.endMs
     };
     const arr: AssEvent[] = this.events.slice();
     arr[this.selected] = updated;
@@ -471,11 +567,10 @@ struct Editor {
       this.status = '没有可保存的文件路径';
       return false;
     }
-    if (this.showStyles) {
-      if (this.styleSelected >= 0 && this.styleSelected < this.styleEntries.length) {
-        this.applyStyle();
-      }
-    } else if (this.selected >= 0 && this.selected < this.events.length) {
+    if (this.styleSelected >= 0 && this.styleSelected < this.styleEntries.length) {
+      this.applyStyle();
+    }
+    if (this.selected >= 0 && this.selected < this.events.length) {
       this.applyEdit();
     }
     try {
@@ -672,11 +767,6 @@ struct Editor {
           .onClick(() => { this.undo(); })
         Button('↷').width(38).fontSize(12).enabled(this.canRedo)
           .onClick(() => { this.redo(); })
-        Button(this.showStyles ? '台词' : '样式')
-          .enabled(this.hasDoc)
-          .onClick(() => { this.toggleStyles(); })
-        Button('测试')
-          .onClick(() => { router.pushUrl({ url: 'pages/Index' }); })
       }
       .width('100%')
 
@@ -692,6 +782,33 @@ struct Editor {
       }
       .width('100%')
 
+      Row({ space: 6 }) {
+        Button('台词')
+          .layoutWeight(1)
+          .backgroundColor(!this.showStyles && !this.showVideo ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => { this.showStyles = false; this.showVideo = false; })
+        Button('样式')
+          .layoutWeight(1)
+          .enabled(this.hasDoc)
+          .backgroundColor(this.showStyles ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => {
+            this.showStyles = true;
+            this.showVideo = false;
+            if (this.styleEntries.length > 0 && this.styleSelected < 0) {
+              this.selectStyle(0);
+            }
+          })
+        Button('视频')
+          .layoutWeight(1)
+          .enabled(this.hasDoc)
+          .backgroundColor(this.showVideo ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => { this.toggleVideo(); })
+        Button('测试')
+          .layoutWeight(1)
+          .onClick(() => { router.pushUrl({ url: 'pages/Index' }); })
+      }
+      .width('100%')
+
       Text(this.status)
         .fontSize(11)
         .fontColor('#555555')
@@ -699,7 +816,68 @@ struct Editor {
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      if (this.hasDoc && this.showStyles) {
+      if (this.hasDoc && this.showVideo) {
+        Column({ space: 6 }) {
+          Row({ space: 6 }) {
+            Button('选择视频').fontSize(11)
+              .onClick(() => { this.pickVideo(); })
+            Text(this.videoName === '' ? '未选择视频' : this.videoName)
+              .fontSize(10).fontColor('#666666').layoutWeight(1)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+
+          if (this.videoUri !== '') {
+            Stack({ alignContent: Alignment.Bottom }) {
+              Video({ src: this.videoUri, controller: this.videoController })
+                .width('100%')
+                .height(220)
+                .controls(true)
+                .onPrepared((e: PreparedInfo) => {
+                  this.videoDuration = e.duration;
+                })
+                .onUpdate((e: PlaybackInfo) => {
+                  this.currentMs = e.time * 1000;
+                  this.updateActiveText();
+                })
+                .onError(() => {
+                  this.videoStatus = '视频播放失败（格式或解码器不支持）';
+                })
+              Text(this.activeText)
+                .fontSize(15)
+                .fontColor('#FFFFFF')
+                .backgroundColor('#B0000000')
+                .width('100%')
+                .padding(6)
+                .textAlign(TextAlign.Center)
+            }
+            .width('100%')
+            .height(220)
+          } else {
+            Column() {
+              Text('选择 MP4 / MKV / TS 预览字幕').fontSize(12).fontColor('#888888')
+            }
+            .width('100%')
+            .height(220)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(8)
+          }
+
+          Row({ space: 6 }) {
+            Button('跳到选中行').fontSize(11)
+              .enabled(this.selected >= 0 && this.videoUri !== '')
+              .onClick(() => { this.seekSelected(); })
+            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
+              .fontSize(10).fontColor('#666666').layoutWeight(1)
+          }
+          .width('100%')
+
+          Text(this.videoStatus).fontSize(10).fontColor('#888888').width('100%')
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else if (this.hasDoc && this.showStyles) {
         Column({ space: 6 }) {
           Text('样式').fontSize(16).fontWeight(FontWeight.Bold).width('100%')
           if (this.styleEntries.length === 0) {

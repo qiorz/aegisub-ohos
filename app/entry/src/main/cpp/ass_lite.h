@@ -12,3 +12,5 @@ std::string NewAssJson();
 // Parse a user-entered ASS time and return canonical H:MM:SS.cc form.
 std::string NormalizeAssTime(const std::string& text);
 std::string NormalizeSrtTime(const std::string& text);
+
+int AssTimeToMs(const std::string& text);
