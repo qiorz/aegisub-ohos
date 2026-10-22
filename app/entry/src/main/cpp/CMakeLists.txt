@@ -20,6 +20,7 @@ list(REMOVE_ITEM TEST_SOURCES "${AEGISUB_SRC}/tests/tests/language_match.cpp")
 
 add_library(aegisubtest SHARED
     napi_init.cpp
+    ass_lite.cpp
     test_runner.cpp
     ${AEGISUB_SRC}/tests/support/util.cpp
     ${TEST_SOURCES})

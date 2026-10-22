@@ -15,8 +15,8 @@ hvigorw --mode module -p product=default -p module=entry@default assembleHap --n
 
 UNSIGNED="$WS/app/entry/build/default/outputs/default/entry-default-unsigned.hap"
 [ -f "$UNSIGNED" ] || { echo "missing $UNSIGNED"; exit 1; }
-cp -f "$UNSIGNED" "$WS/AegisubTest-unsigned.hap"
-echo "unsigned: $WS/AegisubTest-unsigned.hap"
+cp -f "$UNSIGNED" "$WS/Aegisub-unsigned.hap"
+echo "unsigned: $WS/Aegisub-unsigned.hap"
 
-echo "只交付 unsigned HAP：$WS/AegisubTest-unsigned.hap"
+echo "只交付 unsigned HAP：$WS/Aegisub-unsigned.hap"
 echo "需要签名时请自行执行 scripts/sign-test-hap.sh（本工作区不再产出 signed HAP）"

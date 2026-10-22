@@ -1,5 +1,6 @@
 #include <napi/native_api.h>
 
+#include "ass_lite.h"
 #include "test_runner.h"
 
 #include <atomic>
@@ -90,9 +91,34 @@ napi_value Version(napi_env env, napi_callback_info /*info*/) {
     return result;
 }
 
+
+napi_value LoadAss(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "loadAss(path: string) requires a string");
+        return nullptr;
+    }
+    std::string json = LoadAssJson(path);
+    napi_value result;
+    napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
+napi_value NewAss(napi_env env, napi_callback_info /*info*/) {
+    std::string json = NewAssJson();
+    napi_value result;
+    napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"runTests", nullptr, RunTests, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"loadAss", nullptr, LoadAss, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"newAss", nullptr, NewAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

@@ -10,7 +10,7 @@
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { pasteboard } from '@kit.BasicServicesKit';
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import aegisub from 'libaegisubtest.so';
@@ -293,16 +293,22 @@ struct Index {
 
   build() {
     Column({ space: 10 }) {
-      Column({ space: 3 }) {
-        Text('Aegisub Core Test')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-        Text(this.info)
+      Row({ space: 8 }) {
+        Column({ space: 3 }) {
+          Text('Aegisub Core Test')
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+          Text(this.info)
+            .fontSize(11)
+            .fontColor('#666666')
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+        Button('返回编辑器')
           .fontSize(11)
-          .fontColor('#666666')
+          .onClick(() => { router.back(); })
       }
       .width('100%')
-      .alignItems(HorizontalAlign.Start)
 
       Row({ space: 8 }) {
         this.metric('总数', this.total, false)

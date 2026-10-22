@@ -1,7 +1,7 @@
 {
   "string": [
-    { "name": "module_desc", "value": "Aegisub core library test harness" },
-    { "name": "EntryAbility_desc", "value": "Run libaegisub tests and export logs" },
-    { "name": "EntryAbility_label", "value": "Aegisub Test" }
+    { "name": "module_desc", "value": "Aegisub subtitle editor for HarmonyOS" },
+    { "name": "EntryAbility_desc", "value": "Edit ASS subtitles and run libaegisub tests" },
+    { "name": "EntryAbility_label", "value": "Aegisub OHOS" }
   ]
 }
