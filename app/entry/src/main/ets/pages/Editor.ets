@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.9';
+const APP_VERSION = '0.2.0';
 
 interface AssEvent {
   kind: string;
@@ -1618,27 +1618,27 @@ struct Editor {
       }
       .width('100%')
 
-      Row({ space: 6 }) {
-        Button('打开').layoutWeight(1).onClick(() => { this.openAss(); })
-        Button('新建').layoutWeight(1).onClick(() => { this.newAss(); })
-        Button('保存').layoutWeight(1).enabled(this.hasDoc)
-          .onClick(() => { this.saveToSandbox(); })
-        Button('ASS').layoutWeight(1).enabled(this.hasDoc)
-          .onClick(() => { this.exportAss(); })
-        Button('SRT').layoutWeight(1).enabled(this.hasDoc)
-          .onClick(() => { this.exportSrt(); })
-      }
-      .width('100%')
-
-      Row({ space: 6 }) {
-        Button('导入视频').layoutWeight(1).fontSize(11).enabled(this.hasDoc)
+      Row({ space: 3 }) {
+        Button('打开').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .onClick(() => { this.openAss(); })
+        Button('新建').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .onClick(() => { this.newAss(); })
+        Button('保存').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .enabled(this.hasDoc).onClick(() => { this.saveToSandbox(); })
+        Button('ASS').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .enabled(this.hasDoc).onClick(() => { this.exportAss(); })
+        Button('SRT').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .enabled(this.hasDoc).onClick(() => { this.exportSrt(); })
+        Button('+视频').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .enabled(this.hasDoc)
           .onClick(() => {
             this.showVideo = true;
             this.showStyles = false;
             this.showAudio = false;
             this.pickVideo();
           })
-        Button('导入音频').layoutWeight(1).fontSize(11).enabled(this.hasDoc)
+        Button('+音频').layoutWeight(1).height(28).fontSize(10).padding(0)
+          .enabled(this.hasDoc)
           .onClick(() => {
             this.showAudio = true;
             this.showStyles = false;
@@ -1650,7 +1650,7 @@ struct Editor {
 
       Row({ space: 6 }) {
         Button('台词')
-          .layoutWeight(1)
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
           .backgroundColor(!this.showStyles && !this.showVideo && !this.showAudio ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => {
             this.showStyles = false;
@@ -1658,7 +1658,7 @@ struct Editor {
             this.showAudio = false;
           })
         Button('样式')
-          .layoutWeight(1)
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showStyles ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => {
@@ -1670,17 +1670,17 @@ struct Editor {
             }
           })
         Button('视频')
-          .layoutWeight(1)
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showVideo ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleVideo(); })
         Button('音频')
-          .layoutWeight(1)
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showAudio ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleAudio(); })
         Button('日志')
-          .layoutWeight(1)
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
           .onClick(() => { this.exportLog(); })
       }
       .width('100%')
@@ -2127,29 +2127,29 @@ struct Editor {
             .width('100%')
             .onChange((v: string) => { this.editText = v; })
 
-          Row({ space: 3 }) {
-            Button('粗体').layoutWeight(1).fontSize(9)
+          Row({ space: 2 }) {
+            Button('粗').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.applyLineTag('{\\b1}', '{\\b0}'); })
-            Button('斜体').layoutWeight(1).fontSize(9)
+            Button('斜').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.applyLineTag('{\\i1}', '{\\i0}'); })
-            Button('下划线').layoutWeight(1).fontSize(9)
+            Button('下').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.applyLineTag('{\\u1}', '{\\u0}'); })
-            Button('删除线').layoutWeight(1).fontSize(9)
+            Button('删').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.applyLineTag('{\\s1}', '{\\s0}'); })
-            Button('清标签').layoutWeight(1).fontSize(9)
-              .onClick(() => { this.clearLineTags(); })
-          }
-          .width('100%')
-
-          Row({ space: 3 }) {
-            Button('主色红').layoutWeight(1).fontSize(9)
+            Button('红字').layoutWeight(1).height(24).fontSize(9).padding(0)
+              .fontColor('#E03131')
               .onClick(() => { this.applyLineTag('{\\c&H0000FF&}', '{\\r}'); })
-            Button('主色黄').layoutWeight(1).fontSize(9)
+            Button('黄字').layoutWeight(1).height(24).fontSize(9).padding(0)
+              .fontColor('#B8860B')
               .onClick(() => { this.applyLineTag('{\\c&H00FFFF&}', '{\\r}'); })
-            Button('描边红').layoutWeight(1).fontSize(9)
+            Button('红边').layoutWeight(1).height(24).fontSize(9).padding(0)
+              .fontColor('#E03131')
               .onClick(() => { this.applyLineTag('{\\3c&H0000FF&}', '{\\r}'); })
-            Button('描边蓝').layoutWeight(1).fontSize(9)
+            Button('蓝边').layoutWeight(1).height(24).fontSize(9).padding(0)
+              .fontColor('#1C7ED6')
               .onClick(() => { this.applyLineTag('{\\3c&HFF0000&}', '{\\r}'); })
+            Button('清').layoutWeight(1).height(24).fontSize(9).padding(0)
+              .onClick(() => { this.clearLineTags(); })
           }
           .width('100%')
 
@@ -2185,42 +2185,38 @@ struct Editor {
             .width('100%')
           }
 
-          Row({ space: 4 }) {
-            Button('-100ms').layoutWeight(1).fontSize(10)
+          Row({ space: 2 }) {
+            Button('-100').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.shiftSelected(-100); })
-            Button('+100ms').layoutWeight(1).fontSize(10)
+            Button('+100').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.shiftSelected(100); })
-            Button('起点=当前').layoutWeight(1).fontSize(10)
+            Button('起点').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.setBoundary(true); })
-            Button('终点=当前').layoutWeight(1).fontSize(10)
+            Button('终点').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.setBoundary(false); })
-          }
-          .width('100%')
-
-          Row({ space: 4 }) {
-            Button('全部-100ms').layoutWeight(1).fontSize(10)
+            Button('整体-100').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.events.length > 0)
               .onClick(() => { this.shiftAll(-100); })
-            Button('全部+100ms').layoutWeight(1).fontSize(10)
+            Button('整体+100').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.events.length > 0)
               .onClick(() => { this.shiftAll(100); })
           }
           .width('100%')
 
-          Row({ space: 4 }) {
-            Button('新增行').layoutWeight(1).fontSize(10)
+          Row({ space: 2 }) {
+            Button('新增').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.addEvent(); })
-            Button('复制行').layoutWeight(1).fontSize(10)
+            Button('复制').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.duplicateSelected(); })
-            Button('删除行').layoutWeight(1).fontSize(10)
+            Button('删除').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.selected >= 0)
               .onClick(() => { this.deleteEvent(); })
-            Button('排序').layoutWeight(1).fontSize(10)
+            Button('排序').layoutWeight(1).height(24).fontSize(9).padding(0)
               .enabled(this.events.length > 1)
               .onClick(() => { this.sortEvents(); })
           }
