@@ -175,6 +175,14 @@ struct Editor {
     this.newAss();
   }
 
+  private fontFileSize(name: string): number {
+    try {
+      return fs.statSync(`${this.ctx.cacheDir}/aegisub-fonts/${name}`).size;
+    } catch (e) {
+      return -1;
+    }
+  }
+
   private addLog(msg: string): void {
     const d = new Date();
     const p = (n: number): string => n < 10 ? `0${n}` : `${n}`;
@@ -202,6 +210,10 @@ struct Editor {
         `file: ${this.fileName}\npath: ${this.assPath}\n` +
         `hasDoc: ${this.hasDoc}, dirty: ${this.dirty}, ` +
         `events: ${this.events.length}, styles: ${this.styleEntries.length}\n` +
+        `video: ${this.videoPath}\naudio: ${this.audioPath}\n` +
+        `fontConfig: ${this.fontConfigPath}\n` +
+        `fonts: DejaVu=${this.fontFileSize('DejaVuSans.ttf')}, ` +
+        `CJK=${this.fontFileSize('DroidSansFallbackFull.ttf')}\n` +
         `status: ${this.status}\n` +
         '---- log ----\n' + this.logLines.join('\n') + '\n';
       this.writeText(path, text);
