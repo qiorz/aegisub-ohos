@@ -18,12 +18,5 @@ UNSIGNED="$WS/app/entry/build/default/outputs/default/entry-default-unsigned.hap
 cp -f "$UNSIGNED" "$WS/AegisubTest-unsigned.hap"
 echo "unsigned: $WS/AegisubTest-unsigned.hap"
 
-if [ -n "${AEGISUB_SIGN_P12:-}" ] && [ -n "${AEGISUB_SIGN_CER:-}" ] && [ -n "${AEGISUB_SIGN_PROFILE:-}" ]; then
-    bash "$WS/scripts/sign-test-hap.sh" \
-        "$WS/AegisubTest-unsigned.hap" \
-        "$AEGISUB_SIGN_P12" "$AEGISUB_SIGN_CER" "$AEGISUB_SIGN_PROFILE" \
-        "${AEGISUB_KEY_ALIAS:-app-key}" "${AEGISUB_KEY_PWD:-123456}" \
-        "$WS/AegisubTest-signed.hap"
-else
-    echo "跳过签名（设置 AEGISUB_SIGN_P12 / AEGISUB_SIGN_CER / AEGISUB_SIGN_PROFILE 可自动签）"
-fi
+echo "只交付 unsigned HAP：$WS/AegisubTest-unsigned.hap"
+echo "需要签名时请自行执行 scripts/sign-test-hap.sh（本工作区不再产出 signed HAP）"

@@ -26,10 +26,10 @@
   全静态 `gtest-main` 在 qemu-aarch64 下 **371/371 测试通过**。
   详见 [进度-2026-10-22](docs/进度-2026-10-22.md)。
 - **测试 HAP**：可在应用沙箱内跑完整 371 项测试并手动导出日志。
-  产物 `AegisubTest-unsigned.hap` / `AegisubTest-selfsigned.hap`，
+  产物 `AegisubTest-unsigned.hap`（只交付未签名包，签名由使用者完成），
   用法与签名见 [HAP测试包-2026-10-22](docs/HAP测试包-2026-10-22.md)。
 - 当前是 **core-only**（`-Dcore_only=true`）：不含 GUI、音频、视频、fontconfig/libass。
-- 真机未验证；自签 HAP 在华为设备上会被拒绝，需 AGC 的 `.cer` / `.p7b`。
+- 真机 **371/371 通过**（2026-10-22，用户导出日志，164 ms）。
 - 下一步最大未知项仍是 **GUI 路线**（ArkUI 重写 vs wxWidgets OHOS 后端）。
 
 ### 复现入口
