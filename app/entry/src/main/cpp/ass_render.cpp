@@ -1,9 +1,11 @@
 #include "ass_render.h"
 
 #include <ass/ass.h>
+#include <fontconfig/fontconfig.h>
 
 #include <algorithm>
 #include <cstdio>
+#include <set>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -98,5 +100,69 @@ RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
     ass_renderer_done(ren);
     ass_library_done(lib);
     out.ok = true;
+    return out;
+}
+
+static std::string json_escape_font(const std::string& in) {
+    std::string out;
+    out.reserve(in.size() + 8);
+    for (unsigned char c : in) {
+        switch (c) {
+        case '"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default:
+            if (c < 0x20) {
+                char buf[8];
+                std::snprintf(buf, sizeof buf, "\\u%04x", c);
+                out += buf;
+            } else {
+                out += static_cast<char>(c);
+            }
+        }
+    }
+    return out;
+}
+
+std::string ListFontsJson(const std::string& fontConfigPath) {
+    if (fontConfigPath.empty()) {
+        return "{\"ok\":false,\"error\":\"no fontconfig path\"}";
+    }
+    setenv("FONTCONFIG_FILE", fontConfigPath.c_str(), 1);
+    if (!FcInit()) {
+        return "{\"ok\":false,\"error\":\"FcInit failed\"}";
+    }
+    FcObjectSet* os = FcObjectSetBuild(FC_FAMILY, nullptr);
+    if (!os) {
+        return "{\"ok\":false,\"error\":\"FcObjectSetBuild failed\"}";
+    }
+    FcPattern* pat = FcPatternCreate();
+    FcFontSet* set = FcFontList(nullptr, pat, os);
+    FcPatternDestroy(pat);
+    FcObjectSetDestroy(os);
+    if (!set) {
+        return "{\"ok\":false,\"error\":\"FcFontList failed\"}";
+    }
+    std::set<std::string> families;
+    for (int i = 0; i < set->nfont; ++i) {
+        FcChar8* family = nullptr;
+        if (FcPatternGetString(set->fonts[i], FC_FAMILY, 0, &family) == FcResultMatch && family) {
+            families.emplace(reinterpret_cast<const char*>(family));
+        }
+    }
+    FcFontSetDestroy(set);
+
+    std::string out = "{\"ok\":true,\"fonts\":[";
+    bool first = true;
+    for (const auto& family : families) {
+        if (!first) out += ',';
+        first = false;
+        out += '"';
+        out += json_escape_font(family);
+        out += '"';
+    }
+    out += "]}";
     return out;
 }

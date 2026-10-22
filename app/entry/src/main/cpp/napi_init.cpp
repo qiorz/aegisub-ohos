@@ -191,6 +191,21 @@ napi_value NormalizeTime(napi_env env, napi_callback_info info) {
 }
 
 
+napi_value ListFonts(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char cfg[1024] = {0};
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], cfg, sizeof cfg, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "listFonts(fontConfigPath: string) requires a string");
+        return nullptr;
+    }
+    std::string out = ListFontsJson(cfg);
+    napi_value result;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value RenderAss(napi_env env, napi_callback_info info) {
     size_t argc = 6;
     napi_value args[6] = {nullptr};
@@ -244,6 +259,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"timeToMs", nullptr, TimeToMs, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"msToTime", nullptr, MsToTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"renderAss", nullptr, RenderAss, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"listFonts", nullptr, ListFonts, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

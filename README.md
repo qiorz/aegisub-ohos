@@ -32,7 +32,8 @@
   产物 `Aegisub-unsigned.hap`（只交付未签名包，签名由使用者完成），
   用法与签名见 [HAP测试包-2026-10-22](docs/HAP测试包-2026-10-22.md)。
 - 核心库仍是 **core-only**；应用壳已有 ArkUI 编辑与纯文本视频预览，
-  fontconfig 已接入（扫描 `/system/fonts`，缺失时回退内置 DejaVuSans）；
+  fontconfig 已接入（扫描 `/system/fonts`，样式页可枚举/选择系统字体，
+  缺失时回退内置 DejaVuSans）；
   音频波形/打轴尚未接入。
 - 测试页真机 **371/371 通过**（2026-10-22，用户导出日志，164 ms）；
   编辑器页为本轮新增，尚未真机验证。

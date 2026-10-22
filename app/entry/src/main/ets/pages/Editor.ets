@@ -27,6 +27,12 @@ interface AssStyleEntry {
   fields: string[];
 }
 
+interface FontListResult {
+  ok: boolean;
+  fonts?: string[];
+  error?: string;
+}
+
 interface RenderedFrame {
   width: number;
   height: number;
@@ -110,6 +116,10 @@ struct Editor {
   @State subtitleImage: image.PixelMap | undefined = undefined;
   @State renderStatus: string = '';
   @State autoStyled: boolean = false;
+  @State systemFonts: string[] = [];
+  @State fontOptions: SelectOption[] = [];
+  @State fontSelected: number = -1;
+  @State fontListStatus: string = '';
 
   private header: string = '';
   private footer: string = '';
@@ -240,6 +250,34 @@ struct Editor {
       ? (f[this.styleField('PrimaryColour')] ?? '') : '';
     this.editOutline = this.styleField('OutlineColour') >= 0
       ? (f[this.styleField('OutlineColour')] ?? '') : '';
+    this.fontSelected = this.systemFonts.indexOf(this.editFont);
+  }
+
+  private loadFonts(): void {
+    const cfg = this.ensureFontConfig();
+    if (cfg === '') {
+      this.fontListStatus = 'fontconfig 配置不可用';
+      return;
+    }
+    try {
+      const raw: string = aegisub.listFonts(cfg);
+      const result: FontListResult = JSON.parse(raw) as FontListResult;
+      if (!result.ok) {
+        this.fontListStatus = `枚举失败：${result.error ?? 'unknown'}`;
+        return;
+      }
+      const fonts: string[] = result.fonts ?? [];
+      const opts: SelectOption[] = [];
+      for (const f of fonts) {
+        opts.push({ value: f });
+      }
+      this.systemFonts = fonts;
+      this.fontOptions = opts;
+      this.fontSelected = fonts.indexOf(this.editFont);
+      this.fontListStatus = `${fonts.length} 个系统字体`;
+    } catch (e) {
+      this.fontListStatus = `枚举失败：${JSON.stringify(e)}`;
+    }
   }
 
   private applyStyle(): void {
@@ -1152,8 +1190,23 @@ struct Editor {
                 TextInput({ text: this.editFont })
                   .layoutWeight(1).fontSize(11)
                   .onChange((v: string) => { this.editFont = v; })
+                Button('系统字体').fontSize(10)
+                  .onClick(() => { this.loadFonts(); })
               }
               .width('100%')
+
+              if (this.fontOptions.length > 0) {
+                Select(this.fontOptions)
+                  .selected(this.fontSelected)
+                  .value(this.editFont)
+                  .onSelect((index: number, value: string) => {
+                    this.fontSelected = index;
+                    this.editFont = value;
+                  })
+              }
+              if (this.fontListStatus !== '') {
+                Text(this.fontListStatus).fontSize(9).fontColor('#999999').width('100%')
+              }
 
               Row({ space: 5 }) {
                 Text('字号').fontSize(10).fontColor('#666666')

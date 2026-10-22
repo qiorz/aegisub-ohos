@@ -17,3 +17,7 @@ struct RenderedFrame {
 RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
                              int width, int height, const std::string& fontPath,
                              const std::string& fontConfigPath);
+
+// Enumerate font families through fontconfig. Returns a JSON object:
+// {"ok":true,"fonts":["..."]} or {"ok":false,"error":"..."}.
+std::string ListFontsJson(const std::string& fontConfigPath);

@@ -18,6 +18,15 @@ export const timeToMs: (text: string) => number;
 /** Convert milliseconds to ASS time. */
 export const msToTime: (ms: number) => string;
 
+export interface FontListResult {
+  ok: boolean;
+  fonts?: string[];
+  error?: string;
+}
+
+/** Enumerate font families via fontconfig. */
+export const listFonts: (fontConfigPath: string) => string;
+
 /** Render one ASS frame with libass into RGBA8. */
 export const renderAss: (assPath: string, timeMs: number, width: number,
                          height: number, fontPath: string,

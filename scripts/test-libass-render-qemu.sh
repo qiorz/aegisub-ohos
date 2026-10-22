@@ -19,6 +19,10 @@ cat > "$WS/build/ass-render-test-main.cpp" <<'EOF'
 #include <cstdio>
 #include <cstdlib>
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--list-fonts") {
+        std::printf("%s\n", ListFontsJson(argv[2]).c_str());
+        return 0;
+    }
     if (argc < 4) return 2;
     RenderedFrame f = RenderAssFrame(argv[1], std::atoi(argv[2]), 640, 360,
                                      argv[3], argc > 4 ? argv[4] : "");
@@ -75,3 +79,14 @@ cat > "$DATA/fonts.conf" <<'FONTCONF'
 FONTCONF
 echo "=== render at 2s (fontconfig) ==="
 qemu-aarch64-static "$OUT" "$DATA/sample.ass" 2000 "$FONT" "$DATA/fonts.conf"
+
+echo "=== list fonts ==="
+qemu-aarch64-static "$OUT" --list-fonts "$DATA/fonts.conf" > "$DATA/fonts.json"
+python3 - "$DATA/fonts.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+assert d['ok'] is True
+assert 'DejaVu Serif' in d['fonts']
+assert 'DejaVu Sans' in d['fonts']
+print(f"PASS: fontconfig listed {len(d['fonts'])} families, including DejaVu Serif")
+PY
