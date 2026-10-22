@@ -26,6 +26,13 @@ interface AssStyleEntry {
   fields: string[];
 }
 
+interface EditorSnapshot {
+  events: AssEvent[];
+  styleEntries: AssStyleEntry[];
+  selected: number;
+  styleSelected: number;
+}
+
 interface AssDoc {
   ok: boolean;
   error?: string;
@@ -82,6 +89,9 @@ struct Editor {
   @State editSize: string = '';
   @State editPrimary: string = '';
   @State editOutline: string = '';
+  @State dirty: boolean = false;
+  @State canUndo: boolean = false;
+  @State canRedo: boolean = false;
 
   private header: string = '';
   private footer: string = '';
@@ -89,6 +99,8 @@ struct Editor {
   private bom: boolean = false;
 
   private ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+  private undoStack: EditorSnapshot[] = [];
+  private redoStack: EditorSnapshot[] = [];
 
   aboutToAppear(): void {
     this.newAss();
@@ -96,6 +108,91 @@ struct Editor {
 
   private styleIndex(): number {
     return this.format.findIndex((v: string) => v.toLowerCase() === 'style');
+  }
+
+  private cloneEvents(src: AssEvent[]): AssEvent[] {
+    const out: AssEvent[] = [];
+    for (const e of src) {
+      out.push({
+        kind: e.kind,
+        fields: e.fields.slice(),
+        startMs: e.startMs,
+        endMs: e.endMs
+      });
+    }
+    return out;
+  }
+
+  private cloneStyles(src: AssStyleEntry[]): AssStyleEntry[] {
+    const out: AssStyleEntry[] = [];
+    for (const st of src) {
+      out.push({ fields: st.fields.slice() });
+    }
+    return out;
+  }
+
+  private snapshot(): EditorSnapshot {
+    return {
+      events: this.cloneEvents(this.events),
+      styleEntries: this.cloneStyles(this.styleEntries),
+      selected: this.selected,
+      styleSelected: this.styleSelected
+    };
+  }
+
+  private pushUndo(): void {
+    this.undoStack.push(this.snapshot());
+    if (this.undoStack.length > 50) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+    this.canUndo = this.undoStack.length > 0;
+    this.canRedo = false;
+    this.dirty = true;
+  }
+
+  private resetHistory(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.canUndo = false;
+    this.canRedo = false;
+    this.dirty = false;
+  }
+
+  private restoreSnapshot(s: EditorSnapshot): void {
+    this.events = this.cloneEvents(s.events);
+    this.styleEntries = this.cloneStyles(s.styleEntries);
+    this.selected = this.events.length === 0 ? -1 : Math.min(s.selected, this.events.length - 1);
+    this.styleSelected = this.styleEntries.length === 0
+      ? -1 : Math.min(s.styleSelected, this.styleEntries.length - 1);
+    this.loadSelected();
+    if (this.styleSelected >= 0) {
+      this.selectStyle(this.styleSelected);
+    }
+  }
+
+  private undo(): void {
+    const prev = this.undoStack.pop();
+    if (prev === undefined) {
+      return;
+    }
+    this.redoStack.push(this.snapshot());
+    this.restoreSnapshot(prev);
+    this.canUndo = this.undoStack.length > 0;
+    this.canRedo = true;
+    this.dirty = true;
+  }
+
+  private redo(): void {
+    const next = this.redoStack.pop();
+    if (next === undefined) {
+      return;
+    }
+    this.undoStack.push(this.snapshot());
+    this.restoreSnapshot(next);
+    this.canUndo = true;
+    this.canRedo = this.redoStack.length > 0;
+    this.dirty = true;
   }
 
   private styleField(name: string): number {
@@ -139,6 +236,19 @@ struct Editor {
     set('Fontsize', this.editSize.trim());
     set('PrimaryColour', this.editPrimary.trim());
     set('OutlineColour', this.editOutline.trim());
+    const old = this.styleEntries[this.styleSelected].fields;
+    let changed = false;
+    for (let i = 0; i < f.length; i++) {
+      if (f[i] !== old[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) {
+      this.status = '样式无改动';
+      return;
+    }
+    this.pushUndo();
     const arr: AssStyleEntry[] = this.styleEntries.slice();
     arr[this.styleSelected] = { fields: f };
     this.styleEntries = arr;
@@ -253,6 +363,18 @@ struct Editor {
       this.editText = this.sanitizeText(this.editText);
       f[this.textIndex] = this.editText;
     }
+    let changed = false;
+    for (let i = 0; i < f.length; i++) {
+      if (f[i] !== e.fields[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) {
+      this.status = '无改动';
+      return;
+    }
+    this.pushUndo();
     const updated: AssEvent = {
       kind: e.kind,
       fields: f,
@@ -294,6 +416,7 @@ struct Editor {
       fields.push(this.defaultField(this.format[i]));
     }
     const e: AssEvent = { kind: 'Dialogue', fields: fields, startMs: 0, endMs: 2000 };
+    this.pushUndo();
     const arr: AssEvent[] = this.events.slice();
     arr.push(e);
     this.events = arr;
@@ -306,6 +429,7 @@ struct Editor {
     if (this.selected < 0 || this.selected >= this.events.length) {
       return;
     }
+    this.pushUndo();
     const arr: AssEvent[] = this.events.slice();
     arr.splice(this.selected, 1);
     this.events = arr;
@@ -356,6 +480,7 @@ struct Editor {
     }
     try {
       this.writeText(this.assPath, this.serialize());
+      this.dirty = false;
       this.status = `已保存：${this.assPath}`;
       return true;
     } catch (e) {
@@ -398,6 +523,7 @@ struct Editor {
       this.assPath = dest;
       this.fileName = isSrt ? `${name.substring(0, name.length - 4)}.ass` : name;
       this.applyDoc(d);
+      this.resetHistory();
       this.status = isSrt
         ? `已导入 SRT ${name}，共 ${this.events.length} 行（转成 ASS）`
         : `已打开 ${name}，共 ${this.events.length} 行`;
@@ -419,6 +545,7 @@ struct Editor {
       this.assPath = `${dir}/untitled-${stamp()}.ass`;
       this.fileName = 'untitled.ass';
       this.applyDoc(d);
+      this.resetHistory();
       this.status = '已新建 v4.00+ 字幕';
     } catch (e) {
       this.status = `新建失败：${JSON.stringify(e)}`;
@@ -534,12 +661,17 @@ struct Editor {
       Row({ space: 8 }) {
         Column({ space: 2 }) {
           Text('Aegisub OHOS').fontSize(22).fontWeight(FontWeight.Bold)
-          Text(this.fileName === '' ? '未打开文件' : this.fileName)
+          Text(this.fileName === '' ? '未打开文件'
+            : `${this.fileName}${this.dirty ? ' *' : ''}`)
             .fontSize(10).fontColor('#888888').maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
+        Button('↶').width(38).fontSize(12).enabled(this.canUndo)
+          .onClick(() => { this.undo(); })
+        Button('↷').width(38).fontSize(12).enabled(this.canRedo)
+          .onClick(() => { this.redo(); })
         Button(this.showStyles ? '台词' : '样式')
           .enabled(this.hasDoc)
           .onClick(() => { this.toggleStyles(); })
