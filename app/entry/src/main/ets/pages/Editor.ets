@@ -129,6 +129,11 @@ struct Editor {
   @State editSize: string = '';
   @State editPrimary: string = '';
   @State editOutline: string = '';
+  @State editStyleName: string = '';
+  @State editBold: string = '0';
+  @State editItalic: string = '0';
+  @State editAlign: string = '2';
+  @State editOutlineWidth: string = '2';
   @State dirty: boolean = false;
   @State canUndo: boolean = false;
   @State canRedo: boolean = false;
@@ -304,6 +309,16 @@ struct Editor {
       ? (f[this.styleField('PrimaryColour')] ?? '') : '';
     this.editOutline = this.styleField('OutlineColour') >= 0
       ? (f[this.styleField('OutlineColour')] ?? '') : '';
+    this.editStyleName = this.styleField('Name') >= 0
+      ? (f[this.styleField('Name')] ?? '') : '';
+    this.editBold = this.styleField('Bold') >= 0
+      ? (f[this.styleField('Bold')] ?? '0') : '0';
+    this.editItalic = this.styleField('Italic') >= 0
+      ? (f[this.styleField('Italic')] ?? '0') : '0';
+    this.editAlign = this.styleField('Alignment') >= 0
+      ? (f[this.styleField('Alignment')] ?? '2') : '2';
+    this.editOutlineWidth = this.styleField('Outline') >= 0
+      ? (f[this.styleField('Outline')] ?? '2') : '2';
     this.fontSelected = this.systemFonts.indexOf(this.editFont);
   }
 
@@ -345,10 +360,15 @@ struct Editor {
         f[i] = value;
       }
     };
+    set('Name', this.editStyleName.trim());
     set('Fontname', this.editFont.trim());
     set('Fontsize', this.editSize.trim());
     set('PrimaryColour', this.editPrimary.trim());
     set('OutlineColour', this.editOutline.trim());
+    set('Bold', this.editBold.trim());
+    set('Italic', this.editItalic.trim());
+    set('Alignment', this.editAlign.trim());
+    set('Outline', this.editOutlineWidth.trim());
     const old = this.styleEntries[this.styleSelected].fields;
     let changed = false;
     for (let i = 0; i < f.length; i++) {
@@ -371,6 +391,58 @@ struct Editor {
     }
     this.styles = names;
     this.status = '样式已应用（未保存）';
+  }
+
+  private addStyle(): void {
+    if (this.styleFormat.length === 0) {
+      this.status = '该文件没有样式格式，无法新增';
+      return;
+    }
+    let f: string[] = [];
+    if (this.styleSelected >= 0 && this.styleSelected < this.styleEntries.length) {
+      f = this.styleEntries[this.styleSelected].fields.slice();
+    } else {
+      for (let i = 0; i < this.styleFormat.length; i++) {
+        f.push('');
+      }
+    }
+    const set = (name: string, value: string): void => {
+      const i = this.styleField(name);
+      if (i >= 0 && i < f.length) {
+        f[i] = value;
+      }
+    };
+    let n = this.styleEntries.length + 1;
+    let name = `NewStyle${n}`;
+    while (this.styleEntries.some((e: AssStyleEntry) => this.styleName(e) === name)) {
+      n++;
+      name = `NewStyle${n}`;
+    }
+    set('Name', name);
+    if (this.styleField('Fontname') >= 0 && f[this.styleField('Fontname')] === '') {
+      set('Fontname', 'Arial');
+    }
+    if (this.styleField('Fontsize') >= 0 && f[this.styleField('Fontsize')] === '') {
+      set('Fontsize', '48');
+    }
+    if (this.styleField('PrimaryColour') >= 0 && f[this.styleField('PrimaryColour')] === '') {
+      set('PrimaryColour', '&H00FFFFFF');
+    }
+    if (this.styleField('OutlineColour') >= 0 && f[this.styleField('OutlineColour')] === '') {
+      set('OutlineColour', '&H00000000');
+    }
+    this.pushUndo();
+    const arr: AssStyleEntry[] = this.styleEntries.slice();
+    arr.push({ fields: f });
+    this.styleEntries = arr;
+    this.styleSelected = arr.length - 1;
+    this.selectStyle(this.styleSelected);
+    const names: string[] = [];
+    for (const e of arr) {
+      names.push(this.styleName(e));
+    }
+    this.styles = names;
+    this.status = `已新增样式 ${name}（未保存）`;
   }
 
   private toggleStyles(): void {
@@ -1481,7 +1553,12 @@ struct Editor {
         .width('100%')
       } else if (this.hasDoc && this.showStyles) {
         Column({ space: 6 }) {
-          Text('样式').fontSize(16).fontWeight(FontWeight.Bold).width('100%')
+          Row({ space: 6 }) {
+            Text('样式').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
+            Button('新增样式').fontSize(10)
+              .onClick(() => { this.addStyle(); })
+          }
+          .width('100%')
           if (this.styleEntries.length === 0) {
             Text('该文件没有样式段').fontSize(12).fontColor('#888888')
           } else {
@@ -1503,6 +1580,14 @@ struct Editor {
             .divider({ strokeWidth: 1, color: '#E5E5E5' })
 
             Column({ space: 6 }) {
+              Row({ space: 5 }) {
+                Text('名称').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editStyleName })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editStyleName = v; })
+              }
+              .width('100%')
+
               Row({ space: 5 }) {
                 Text('字体').fontSize(10).fontColor('#666666')
                 TextInput({ text: this.editFont })
@@ -1539,14 +1624,35 @@ struct Editor {
               .width('100%')
 
               Row({ space: 5 }) {
-                Text('描边').fontSize(10).fontColor('#666666')
+                Text('描边色').fontSize(10).fontColor('#666666')
                 TextInput({ text: this.editOutline })
                   .layoutWeight(1).fontSize(11)
                   .onChange((v: string) => { this.editOutline = v; })
-                Button('应用样式').fontSize(11)
-                  .onClick(() => { this.applyStyle(); })
+                Text('描边宽').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editOutlineWidth })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editOutlineWidth = v; })
               }
               .width('100%')
+
+              Row({ space: 5 }) {
+                Text('粗体').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editBold })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editBold = v; })
+                Text('斜体').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editItalic })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editItalic = v; })
+                Text('对齐').fontSize(10).fontColor('#666666')
+                TextInput({ text: this.editAlign })
+                  .layoutWeight(1).fontSize(11)
+                  .onChange((v: string) => { this.editAlign = v; })
+              }
+              .width('100%')
+
+              Button('应用样式').fontSize(11)
+                .onClick(() => { this.applyStyle(); })
             }
             .padding(8)
             .backgroundColor('#FFFFFF')
