@@ -42,3 +42,7 @@ echo "=== sintel.mp4 ==="
 check /root/opt/dsh/workspace/hb-build/cli/sintel.mp4 24
 echo "=== sample.mp4 ==="
 check /root/opt/dsh/workspace/hb-build/cli/sample.mp4 30
+echo "=== noaudio.mkv ==="
+check /root/opt/dsh/workspace/hb-build/cli/noaudio.mkv 24
+echo "=== sub-zh.mkv ==="
+check /root/opt/dsh/workspace/hb-build/cli/sub-zh.mkv 30

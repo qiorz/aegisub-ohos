@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.7';
+const APP_VERSION = '0.1.8';
 
 interface AssEvent {
   kind: string;

@@ -117,7 +117,142 @@ std::string err(const char* msg) {
 
 } // namespace
 
+
+namespace {
+
+bool readVintId(const std::vector<uint8_t>& d, size_t& pos, size_t end, uint64_t& id) {
+    if (pos >= end) return false;
+    uint8_t first = d[pos];
+    int n = 1;
+    uint8_t mask = 0x80;
+    while (n <= 4 && !(first & mask)) { mask >>= 1; ++n; }
+    if (n > 4 || pos + n > end) return false;
+    uint64_t v = first;
+    for (int i = 1; i < n; ++i) v = (v << 8) | d[pos + i];
+    pos += n;
+    id = v;
+    return true;
+}
+
+bool readVintSize(const std::vector<uint8_t>& d, size_t& pos, size_t end,
+                  uint64_t& size, bool& unknown) {
+    if (pos >= end) return false;
+    uint8_t first = d[pos];
+    int n = 1;
+    uint8_t mask = 0x80;
+    while (n <= 8 && !(first & mask)) { mask >>= 1; ++n; }
+    if (n > 8 || pos + n > end) return false;
+    uint64_t v = first & (mask - 1);
+    for (int i = 1; i < n; ++i) v = (v << 8) | d[pos + i];
+    const uint64_t max = (1ULL << (7 * n)) - 1;
+    unknown = v == max;
+    pos += n;
+    size = v;
+    return true;
+}
+
+struct Elem {
+    uint64_t id = 0;
+    size_t payload = 0;
+    size_t end = 0;
+};
+
+bool nextElem(const std::vector<uint8_t>& d, size_t& pos, size_t end, Elem& e) {
+    uint64_t id = 0, size = 0;
+    if (!readVintId(d, pos, end, id)) return false;
+    bool unknown = false;
+    if (!readVintSize(d, pos, end, size, unknown)) return false;
+    e.id = id;
+    e.payload = pos;
+    if (unknown || size > end - pos) size = end - pos;
+    e.end = pos + static_cast<size_t>(size);
+    pos = e.end;
+    return true;
+}
+
+uint64_t readUInt(const std::vector<uint8_t>& d, const Elem& e) {
+    uint64_t v = 0;
+    for (size_t i = e.payload; i < e.end; ++i) v = (v << 8) | d[i];
+    return v;
+}
+
+double parseTrackEntry(const std::vector<uint8_t>& d, const Elem& entry) {
+    bool video = false;
+    uint64_t default_duration = 0;
+    size_t p = entry.payload;
+    Elem e;
+    while (nextElem(d, p, entry.end, e)) {
+        if (e.id == 0x83) { // TrackType
+            video = readUInt(d, e) == 1;
+        } else if (e.id == 0x23E383) { // DefaultDuration, ns
+            default_duration = readUInt(d, e);
+        }
+    }
+    if (video && default_duration > 0 && default_duration < 1000000000ULL) {
+        return 1e9 / static_cast<double>(default_duration);
+    }
+    return 0.0;
+}
+
+double parseTracks(const std::vector<uint8_t>& d, const Elem& tracks) {
+    size_t p = tracks.payload;
+    Elem e;
+    while (nextElem(d, p, tracks.end, e)) {
+        if (e.id == 0xAE) { // TrackEntry
+            double fps = parseTrackEntry(d, e);
+            if (fps > 1.0 && fps < 240.0) return fps;
+        }
+    }
+    return 0.0;
+}
+
+double probeMkv(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return 0.0;
+    in.seekg(0, std::ios::end);
+    const std::streamoff size = in.tellg();
+    if (size < 16) return 0.0;
+    const size_t cap = 32ULL * 1024 * 1024;
+    const size_t read_size = static_cast<size_t>(size) < cap ? static_cast<size_t>(size) : cap;
+    std::vector<uint8_t> d(read_size);
+    in.seekg(0);
+    in.read(reinterpret_cast<char*>(d.data()), d.size());
+    if (!in) return 0.0;
+    size_t pos = 0;
+    Elem e;
+    while (nextElem(d, pos, d.size(), e)) {
+        if (e.id == 0x18538067) { // Segment
+            size_t p = e.payload;
+            Elem c;
+            while (nextElem(d, p, e.end, c)) {
+                if (c.id == 0x1654AE6B) { // Tracks
+                    double fps = parseTracks(d, c);
+                    if (fps > 0) return fps;
+                }
+                if (c.id == 0x1F43B675) break; // Cluster; Tracks normally before it
+            }
+        }
+        if (e.id == 0x1A45DFA3) continue; // EBML header
+    }
+    return 0.0;
+}
+
+} // namespace
+
 std::string VideoProbeJson(const std::string& path) {
+    {
+        std::ifstream magic_in(path, std::ios::binary);
+        uint8_t magic[4] = {0};
+        if (!magic_in.read(reinterpret_cast<char*>(magic), 4)) return err("cannot open");
+        if (magic[0] == 0x1A && magic[1] == 0x45 && magic[2] == 0xDF && magic[3] == 0xA3) {
+            const double mkv_fps = probeMkv(path);
+            if (mkv_fps <= 1.0 || mkv_fps >= 240.0) return err("no MKV DefaultDuration");
+            char mkbuf[96];
+            std::snprintf(mkbuf, sizeof mkbuf,
+                          "{\"ok\":true,\"fps\":%.3f,\"width\":0,\"height\":0}", mkv_fps);
+            return mkbuf;
+        }
+    }
     std::ifstream in(path, std::ios::binary);
     if (!in) return err("cannot open");
     in.seekg(0, std::ios::end);
