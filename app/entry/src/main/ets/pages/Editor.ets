@@ -109,6 +109,7 @@ struct Editor {
   @State activeText: string = '';
   @State subtitleImage: image.PixelMap | undefined = undefined;
   @State renderStatus: string = '';
+  @State autoStyled: boolean = false;
 
   private header: string = '';
   private footer: string = '';
@@ -119,6 +120,8 @@ struct Editor {
   private undoStack: EditorSnapshot[] = [];
   private redoStack: EditorSnapshot[] = [];
   private videoController: VideoController = new VideoController();
+  private renderBusy: boolean = false;
+  private lastAutoRender: number = 0;
 
   aboutToAppear(): void {
     this.newAss();
@@ -341,16 +344,21 @@ struct Editor {
   }
 
   async renderStyled(): Promise<void> {
-    if (!this.hasDoc) {
+    await this.renderAssFrame(Math.round(this.currentMs), true);
+  }
+
+  private async renderAssFrame(timeMs: number, saveFirst: boolean): Promise<void> {
+    if (!this.hasDoc || this.assPath === '' || this.renderBusy) {
       return;
     }
-    if (!this.saveToSandbox()) {
+    if (saveFirst && !this.saveToSandbox()) {
       return;
     }
+    this.renderBusy = true;
     try {
       const font = this.ensureFont();
       const frame: RenderedFrame = aegisub.renderAss(
-        this.assPath, Math.round(this.currentMs), 640, 360, font);
+        this.assPath, timeMs, 640, 360, font);
       const opts: image.InitializationOptions = {
         size: { width: frame.width, height: frame.height },
         pixelFormat: image.PixelMapFormat.RGBA_8888,
@@ -359,10 +367,24 @@ struct Editor {
       };
       this.subtitleImage = await image.createPixelMap(frame.pixels, opts);
       this.renderStatus = `已渲染 ${frame.width}x${frame.height} @ ` +
-        `${(this.currentMs / 1000).toFixed(2)}s`;
+        `${(timeMs / 1000).toFixed(2)}s`;
     } catch (e) {
       this.renderStatus = `样式渲染失败：${JSON.stringify(e)}`;
+    } finally {
+      this.renderBusy = false;
     }
+  }
+
+  private maybeAutoRender(): void {
+    if (!this.autoStyled || this.renderBusy || !this.hasDoc) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastAutoRender < 400) {
+      return;
+    }
+    this.lastAutoRender = now;
+    this.renderAssFrame(Math.round(this.currentMs), false);
   }
 
   async pickVideo(): Promise<void> {
@@ -401,6 +423,7 @@ struct Editor {
       this.videoName = name;
       this.currentMs = 0;
       this.subtitleImage = undefined;
+      this.autoStyled = false;
       this.videoStatus = '已选择；点播放预览字幕';
       this.updateActiveText();
     } catch (e) {
@@ -466,6 +489,7 @@ struct Editor {
     this.updateActiveText();
     this.subtitleImage = undefined;
     this.renderStatus = '';
+    this.autoStyled = false;
   }
 
   private loadSelected(): void {
@@ -994,8 +1018,12 @@ struct Editor {
                 })
                 .onUpdate((e: PlaybackInfo) => {
                   this.currentMs = e.time * 1000;
-                  this.subtitleImage = undefined;
                   this.updateActiveText();
+                  if (this.autoStyled) {
+                    this.maybeAutoRender();
+                  } else {
+                    this.subtitleImage = undefined;
+                  }
                 })
                 .onError(() => {
                   this.videoStatus = '视频播放失败（格式或解码器不支持）';
@@ -1037,6 +1065,23 @@ struct Editor {
               .onClick(() => { this.renderStyled(); })
             Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
               .fontSize(10).fontColor('#666666').layoutWeight(1)
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('自动样式预览').fontSize(10).fontColor('#666666')
+            Toggle({ type: ToggleType.Switch, isOn: this.autoStyled })
+              .onChange((on: boolean) => {
+                this.autoStyled = on;
+                if (on) {
+                  if (this.saveToSandbox()) {
+                    this.renderAssFrame(Math.round(this.currentMs), false);
+                  }
+                } else {
+                  this.subtitleImage = undefined;
+                }
+              })
+            Text(this.renderStatus).fontSize(9).fontColor('#999999').layoutWeight(1)
           }
           .width('100%')
 
