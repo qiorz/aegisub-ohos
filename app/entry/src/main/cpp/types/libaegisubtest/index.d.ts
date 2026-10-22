@@ -15,6 +15,9 @@ export const normalizeTime: (text: string) => string;
 export const srtTime: (text: string) => string;
 export const timeToMs: (text: string) => number;
 
+/** Convert milliseconds to ASS time. */
+export const msToTime: (ms: number) => string;
+
 /** Render one ASS frame with libass into RGBA8. */
 export const renderAss: (assPath: string, timeMs: number, width: number,
                          height: number, fontPath: string) => RenderedFrame;

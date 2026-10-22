@@ -599,6 +599,97 @@ struct Editor {
     this.status = '已删除一行；点“保存”写入文件';
   }
 
+  private shiftSelected(deltaMs: number): void {
+    if (this.selected < 0 || this.selected >= this.events.length ||
+        this.startIndex < 0 || this.endIndex < 0) {
+      return;
+    }
+    this.applyEdit();
+    const e = this.events[this.selected];
+    const f: string[] = e.fields.slice();
+    const s: number = Math.max(0, aegisub.timeToMs(f[this.startIndex]) + deltaMs);
+    const en: number = Math.max(s, aegisub.timeToMs(f[this.endIndex]) + deltaMs);
+    f[this.startIndex] = aegisub.msToTime(s);
+    f[this.endIndex] = aegisub.msToTime(en);
+    this.pushUndo();
+    const updated: AssEvent = { kind: e.kind, fields: f, startMs: s, endMs: en };
+    const arr: AssEvent[] = this.events.slice();
+    arr[this.selected] = updated;
+    this.events = arr;
+    this.editStart = f[this.startIndex];
+    this.editEnd = f[this.endIndex];
+    this.status = `时间偏移 ${deltaMs > 0 ? '+' : ''}${deltaMs} ms`;
+  }
+
+  private setBoundary(toStart: boolean): void {
+    if (this.selected < 0 || this.selected >= this.events.length ||
+        this.startIndex < 0 || this.endIndex < 0) {
+      return;
+    }
+    this.applyEdit();
+    const e = this.events[this.selected];
+    const f: string[] = e.fields.slice();
+    const now: number = Math.max(0, Math.round(this.currentMs));
+    let s: number = aegisub.timeToMs(f[this.startIndex]);
+    let en: number = aegisub.timeToMs(f[this.endIndex]);
+    if (toStart) {
+      s = now;
+      if (en < s) {
+        en = s;
+      }
+    } else {
+      en = now;
+      if (s > en) {
+        s = en;
+      }
+    }
+    f[this.startIndex] = aegisub.msToTime(s);
+    f[this.endIndex] = aegisub.msToTime(en);
+    this.pushUndo();
+    const updated: AssEvent = { kind: e.kind, fields: f, startMs: s, endMs: en };
+    const arr: AssEvent[] = this.events.slice();
+    arr[this.selected] = updated;
+    this.events = arr;
+    this.editStart = f[this.startIndex];
+    this.editEnd = f[this.endIndex];
+    this.status = toStart ? '起点已设为播放位置' : '终点已设为播放位置';
+  }
+
+  private duplicateSelected(): void {
+    if (this.selected < 0 || this.selected >= this.events.length) {
+      return;
+    }
+    this.applyEdit();
+    const e = this.events[this.selected];
+    this.pushUndo();
+    const copy: AssEvent = {
+      kind: e.kind,
+      fields: e.fields.slice(),
+      startMs: e.startMs,
+      endMs: e.endMs
+    };
+    const arr: AssEvent[] = this.events.slice();
+    arr.splice(this.selected + 1, 0, copy);
+    this.events = arr;
+    this.selected = this.selected + 1;
+    this.loadSelected();
+    this.status = '已复制选中行';
+  }
+
+  private sortEvents(): void {
+    if (this.events.length < 2) {
+      return;
+    }
+    this.applyEdit();
+    this.pushUndo();
+    const arr: AssEvent[] = this.events.slice();
+    arr.sort((a: AssEvent, b: AssEvent): number => a.startMs - b.startMs);
+    this.events = arr;
+    this.selected = 0;
+    this.loadSelected();
+    this.status = '已按开始时间排序';
+  }
+
   private serialize(): string {
     let out = this.buildHeader();
     if (out.length > 0 && !out.endsWith(this.eol)) {
@@ -1078,12 +1169,34 @@ struct Editor {
             .width('100%')
             .onChange((v: string) => { this.editText = v; })
 
-          Row({ space: 6 }) {
-            Button('新增行').layoutWeight(1).fontSize(11)
+          Row({ space: 4 }) {
+            Button('-100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0)
+              .onClick(() => { this.shiftSelected(-100); })
+            Button('+100ms').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0)
+              .onClick(() => { this.shiftSelected(100); })
+            Button('起点=当前').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0)
+              .onClick(() => { this.setBoundary(true); })
+            Button('终点=当前').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0)
+              .onClick(() => { this.setBoundary(false); })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Button('新增行').layoutWeight(1).fontSize(10)
               .onClick(() => { this.addEvent(); })
-            Button('删除行').layoutWeight(1).fontSize(11)
+            Button('复制行').layoutWeight(1).fontSize(10)
+              .enabled(this.selected >= 0)
+              .onClick(() => { this.duplicateSelected(); })
+            Button('删除行').layoutWeight(1).fontSize(10)
               .enabled(this.selected >= 0)
               .onClick(() => { this.deleteEvent(); })
+            Button('排序').layoutWeight(1).fontSize(10)
+              .enabled(this.events.length > 1)
+              .onClick(() => { this.sortEvents(); })
           }
           .width('100%')
         }

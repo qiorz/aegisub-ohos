@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
     std::printf("NORM_BAD:%s\n", NormalizeAssTime("abc").c_str());
     std::printf("SRT:%s\n", NormalizeSrtTime("0:00:01.00").c_str());
     std::printf("MS:%d\n", AssTimeToMs("0:00:01.00"));
+    std::printf("MS2:%s\n", MsToAssTime(1500).c_str());
     return 0;
 }
 EOF

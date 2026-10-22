@@ -14,3 +14,4 @@ std::string NormalizeAssTime(const std::string& text);
 std::string NormalizeSrtTime(const std::string& text);
 
 int AssTimeToMs(const std::string& text);
+std::string MsToAssTime(int ms);

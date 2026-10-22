@@ -160,6 +160,21 @@ napi_value TimeToMs(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value MsToTime(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    int32_t ms = 0;
+    if (argc < 1 || napi_get_value_int32(env, args[0], &ms) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "msToTime(ms: number) requires a number");
+        return nullptr;
+    }
+    std::string out = MsToAssTime(ms);
+    napi_value result;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value NormalizeTime(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -223,6 +238,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"loadSrt", nullptr, LoadSrt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"srtTime", nullptr, SrtTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"timeToMs", nullptr, TimeToMs, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"msToTime", nullptr, MsToTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"renderAss", nullptr, RenderAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
