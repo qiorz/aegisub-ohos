@@ -21,6 +21,7 @@ list(REMOVE_ITEM TEST_SOURCES "${AEGISUB_SRC}/tests/tests/language_match.cpp")
 add_library(aegisubtest SHARED
     napi_init.cpp
     ass_lite.cpp
+    ass_render.cpp
     test_runner.cpp
     ${AEGISUB_SRC}/tests/support/util.cpp
     ${TEST_SOURCES})
@@ -59,6 +60,10 @@ set(AEGISUB_STATIC_LIBS
     ${AEGISUB_PREFIX}/lib/libicuuc.a
     ${AEGISUB_PREFIX}/lib/libicudata.a
     ${AEGISUB_PREFIX}/lib/libluajit-5.1.a
+    ${AEGISUB_PREFIX}/lib/libass.a
+    ${AEGISUB_PREFIX}/lib/libharfbuzz.a
+    ${AEGISUB_PREFIX}/lib/libfribidi.a
+    ${AEGISUB_PREFIX}/lib/libfreetype.a
     ${AEGISUB_PREFIX}/lib/libz.a)
 
 target_link_libraries(aegisubtest PUBLIC

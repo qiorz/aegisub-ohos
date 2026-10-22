@@ -11,6 +11,7 @@ import { common } from '@kit.AbilityKit';
 import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { image } from '@kit.ImageKit';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
@@ -24,6 +25,12 @@ interface AssEvent {
 
 interface AssStyleEntry {
   fields: string[];
+}
+
+interface RenderedFrame {
+  width: number;
+  height: number;
+  pixels: ArrayBuffer;
 }
 
 interface EditorSnapshot {
@@ -100,6 +107,8 @@ struct Editor {
   @State currentMs: number = 0;
   @State videoDuration: number = 0;
   @State activeText: string = '';
+  @State subtitleImage: image.PixelMap | undefined = undefined;
+  @State renderStatus: string = '';
 
   private header: string = '';
   private footer: string = '';
@@ -303,6 +312,59 @@ struct Editor {
     this.activeText = text;
   }
 
+  private ensureFont(): string {
+    const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
+    const dest = `${dir}/DejaVuSans.ttf`;
+    try {
+      if (fs.accessSync(dest)) {
+        return dest;
+      }
+    } catch (e) {
+      // not extracted yet
+    }
+    try {
+      fs.mkdirSync(dir, true);
+    } catch (e) {
+      // exists
+    }
+    const bytes: Uint8Array = this.ctx.resourceManager.getRawFileContentSync('fonts/DejaVuSans.ttf');
+    const f = fs.openSync(dest,
+      fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+    try {
+      const buffer: ArrayBuffer = bytes.buffer.slice(
+        bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      fs.writeSync(f.fd, buffer);
+    } finally {
+      fs.closeSync(f);
+    }
+    return dest;
+  }
+
+  async renderStyled(): Promise<void> {
+    if (!this.hasDoc) {
+      return;
+    }
+    if (!this.saveToSandbox()) {
+      return;
+    }
+    try {
+      const font = this.ensureFont();
+      const frame: RenderedFrame = aegisub.renderAss(
+        this.assPath, Math.round(this.currentMs), 640, 360, font);
+      const opts: image.InitializationOptions = {
+        size: { width: frame.width, height: frame.height },
+        pixelFormat: image.PixelMapFormat.RGBA_8888,
+        alphaType: image.AlphaType.PREMUL,
+        editable: false
+      };
+      this.subtitleImage = await image.createPixelMap(frame.pixels, opts);
+      this.renderStatus = `已渲染 ${frame.width}x${frame.height} @ ` +
+        `${(this.currentMs / 1000).toFixed(2)}s`;
+    } catch (e) {
+      this.renderStatus = `样式渲染失败：${JSON.stringify(e)}`;
+    }
+  }
+
   async pickVideo(): Promise<void> {
     try {
       const opt = new picker.DocumentSelectOptions();
@@ -338,6 +400,7 @@ struct Editor {
       this.videoUri = fileUri.getUriFromPath(dest);
       this.videoName = name;
       this.currentMs = 0;
+      this.subtitleImage = undefined;
       this.videoStatus = '已选择；点播放预览字幕';
       this.updateActiveText();
     } catch (e) {
@@ -401,6 +464,8 @@ struct Editor {
       this.selectStyle(this.styleSelected);
     }
     this.updateActiveText();
+    this.subtitleImage = undefined;
+    this.renderStatus = '';
   }
 
   private loadSelected(): void {
@@ -838,18 +903,26 @@ struct Editor {
                 })
                 .onUpdate((e: PlaybackInfo) => {
                   this.currentMs = e.time * 1000;
+                  this.subtitleImage = undefined;
                   this.updateActiveText();
                 })
                 .onError(() => {
                   this.videoStatus = '视频播放失败（格式或解码器不支持）';
                 })
-              Text(this.activeText)
-                .fontSize(15)
-                .fontColor('#FFFFFF')
-                .backgroundColor('#B0000000')
-                .width('100%')
-                .padding(6)
-                .textAlign(TextAlign.Center)
+              if (this.subtitleImage !== undefined) {
+                Image(this.subtitleImage)
+                  .width('100%')
+                  .height(220)
+                  .objectFit(ImageFit.Contain)
+              } else {
+                Text(this.activeText)
+                  .fontSize(15)
+                  .fontColor('#FFFFFF')
+                  .backgroundColor('#B0000000')
+                  .width('100%')
+                  .padding(6)
+                  .textAlign(TextAlign.Center)
+              }
             }
             .width('100%')
             .height(220)
@@ -868,12 +941,18 @@ struct Editor {
             Button('跳到选中行').fontSize(11)
               .enabled(this.selected >= 0 && this.videoUri !== '')
               .onClick(() => { this.seekSelected(); })
+            Button('样式渲染').fontSize(11)
+              .enabled(this.hasDoc)
+              .onClick(() => { this.renderStyled(); })
             Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
               .fontSize(10).fontColor('#666666').layoutWeight(1)
           }
           .width('100%')
 
           Text(this.videoStatus).fontSize(10).fontColor('#888888').width('100%')
+          if (this.renderStatus !== '') {
+            Text(this.renderStatus).fontSize(10).fontColor('#888888').width('100%')
+          }
         }
         .layoutWeight(1)
         .width('100%')

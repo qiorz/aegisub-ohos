@@ -31,4 +31,15 @@ with open(os.path.join(root, 'manifest.json'), 'w', encoding='utf-8') as f:
 print('fixture files:', len(files))
 PY
 
+# A font for libass preview (libass is built without fontconfig).
+FONT_SRC=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+FONT_DEST="$WS/app/entry/src/main/resources/rawfile/fonts"
+if [ -f "$FONT_SRC" ]; then
+    mkdir -p "$FONT_DEST"
+    cp -f "$FONT_SRC" "$FONT_DEST/DejaVuSans.ttf"
+    echo "font: $FONT_DEST/DejaVuSans.ttf"
+else
+    echo "WARN: $FONT_SRC not found; styled preview will be unavailable"
+fi
+
 du -sh "$DEST"

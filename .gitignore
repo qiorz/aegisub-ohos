@@ -14,6 +14,7 @@
 /app/entry/.cxx/
 /app/.hvigor/
 /app/entry/src/main/resources/rawfile/testdata/
+/app/entry/src/main/resources/rawfile/fonts/
 /app/signing/*.p12
 /app/signing/*.p7b
 /app/signing/*.cer

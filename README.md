@@ -27,12 +27,12 @@
   详见 [进度-2026-10-22](docs/进度-2026-10-22.md)。
 - **ArkUI 编辑器 MVP**：主页面 `pages/Editor` 可打开/新建 ASS、导入 SRT、
   编辑台词与起止时间、编辑样式字体/字号/颜色、撤销/重做、视频预览叠加字幕、
-  导出 ASS/SRT；
+  libass 单帧样式渲染、导出 ASS/SRT；
   测试页 `pages/Index` 保留（沙箱内 371 项 gtest + 日志导出）。
   产物 `Aegisub-unsigned.hap`（只交付未签名包，签名由使用者完成），
   用法与签名见 [HAP测试包-2026-10-22](docs/HAP测试包-2026-10-22.md)。
 - 核心库仍是 **core-only**；应用壳已有 ArkUI 编辑与纯文本视频预览，
-  音频、libass 样式化渲染、fontconfig 字体枚举尚未接入。
+  音频波形/打轴、fontconfig 字体枚举尚未接入；libass 仅用内置 DejaVuSans。
 - 测试页真机 **371/371 通过**（2026-10-22，用户导出日志，164 ms）；
   编辑器页为本轮新增，尚未真机验证。
 - 下一步最大未知项仍是 **GUI 路线**（ArkUI 重写 vs wxWidgets OHOS 后端）。

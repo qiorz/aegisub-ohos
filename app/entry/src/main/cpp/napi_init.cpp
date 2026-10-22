@@ -1,9 +1,11 @@
 #include <napi/native_api.h>
 
 #include "ass_lite.h"
+#include "ass_render.h"
 #include "test_runner.h"
 
 #include <atomic>
+#include <cstring>
 #include <string>
 
 namespace {
@@ -173,6 +175,46 @@ napi_value NormalizeTime(napi_env env, napi_callback_info info) {
     return result;
 }
 
+
+napi_value RenderAss(napi_env env, napi_callback_info info) {
+    size_t argc = 5;
+    napi_value args[5] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char ass_path[1024] = {0};
+    char font_path[1024] = {0};
+    int32_t time_ms = 0, width = 0, height = 0;
+    if (argc < 5 ||
+        napi_get_value_string_utf8(env, args[0], ass_path, sizeof ass_path, nullptr) != napi_ok ||
+        napi_get_value_int32(env, args[1], &time_ms) != napi_ok ||
+        napi_get_value_int32(env, args[2], &width) != napi_ok ||
+        napi_get_value_int32(env, args[3], &height) != napi_ok ||
+        napi_get_value_string_utf8(env, args[4], font_path, sizeof font_path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "renderAss(path, timeMs, width, height, fontPath)");
+        return nullptr;
+    }
+    RenderedFrame frame = RenderAssFrame(ass_path, time_ms, width, height, font_path);
+    if (!frame.ok) {
+        napi_throw_error(env, nullptr, frame.error.c_str());
+        return nullptr;
+    }
+    void* data = nullptr;
+    napi_value buffer;
+    if (napi_create_arraybuffer(env, frame.pixels.size(), &data, &buffer) != napi_ok) {
+        napi_throw_error(env, nullptr, "cannot allocate pixel buffer");
+        return nullptr;
+    }
+    std::memcpy(data, frame.pixels.data(), frame.pixels.size());
+    napi_value obj;
+    napi_create_object(env, &obj);
+    napi_value v;
+    napi_create_int32(env, frame.width, &v);
+    napi_set_named_property(env, obj, "width", v);
+    napi_create_int32(env, frame.height, &v);
+    napi_set_named_property(env, obj, "height", v);
+    napi_set_named_property(env, obj, "pixels", buffer);
+    return obj;
+}
+
 napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"runTests", nullptr, RunTests, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -181,6 +223,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"loadSrt", nullptr, LoadSrt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"srtTime", nullptr, SrtTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"timeToMs", nullptr, TimeToMs, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"renderAss", nullptr, RenderAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
