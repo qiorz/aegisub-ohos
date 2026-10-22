@@ -2,8 +2,17 @@
 # qemu 回归：MP4 mdhd/stts FPS 探测（与 HAP 同一份 video_probe.cpp）。
 set -euo pipefail
 
-WS=/root/opt/dsh/workspace-aegisub
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$WS/scripts/env.sh"
+
+# 测试素材目录：默认找 <repo>/testdata 或同级 HandBrake 工作区，找不到就要求显式指定
+SAMPLE_DIR="${SAMPLE_DIR:-}"
+if [ -z "$SAMPLE_DIR" ]; then
+  for d in "$WS/testdata" "$WS/../workspace/hb-build/cli"; do
+    [ -d "$d" ] && SAMPLE_DIR="$d" && break
+  done
+fi
+[ -n "$SAMPLE_DIR" ] || { echo "set SAMPLE_DIR to a dir with sintel.mp4 / sample.mp4 / noaudio.mkv / sub-zh.mkv"; exit 1; }
 OUT="$WS/build/video-probe-test"
 DATA="$WS/build/video-probe-test-data"
 mkdir -p "$DATA"
@@ -39,10 +48,10 @@ PY
 }
 
 echo "=== sintel.mp4 ==="
-check /root/opt/dsh/workspace/hb-build/cli/sintel.mp4 24
+check "$SAMPLE_DIR"/sintel.mp4 24
 echo "=== sample.mp4 ==="
-check /root/opt/dsh/workspace/hb-build/cli/sample.mp4 30
+check "$SAMPLE_DIR"/sample.mp4 30
 echo "=== noaudio.mkv ==="
-check /root/opt/dsh/workspace/hb-build/cli/noaudio.mkv 24
+check "$SAMPLE_DIR"/noaudio.mkv 24
 echo "=== sub-zh.mkv ==="
-check /root/opt/dsh/workspace/hb-build/cli/sub-zh.mkv 30
+check "$SAMPLE_DIR"/sub-zh.mkv 30

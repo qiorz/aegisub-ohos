@@ -34,7 +34,9 @@ export OHOS_AR="$OHOS_LLVM/llvm-ar"
 export OHOS_STRIP="$OHOS_LLVM/llvm-strip"
 
 # 复用 HandBrake 的 OHOS 预编译库（使用前先核对 ABI/版本）
-export HB_WORKSPACE=/root/opt/dsh/workspace
+# HandBrake 移植工作区（默认取同级的 workspace 目录，可用环境变量覆盖）
+_HB_HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+export HB_WORKSPACE="${HB_WORKSPACE:-$_HB_HERE/../../workspace}"
 export HB_PREBUILT="$HB_WORKSPACE/hb-port/src/prebuilt"
 export HB_DEPS="$HB_WORKSPACE/hb-build/deps"
 
