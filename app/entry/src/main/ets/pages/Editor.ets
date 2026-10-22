@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.3';
+const APP_VERSION = '0.1.4';
 
 interface AssEvent {
   kind: string;
@@ -1662,6 +1662,43 @@ struct Editor {
           }
           .width('100%')
 
+          Row({ space: 6 }) {
+            Button('跳到选中行').fontSize(11)
+              .enabled(this.selected >= 0 && this.videoUri !== '')
+              .onClick(() => { this.seekSelected(); })
+            Button('样式渲染').fontSize(11)
+              .enabled(this.hasDoc)
+              .onClick(() => { this.renderStyled(); })
+            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
+              .fontSize(10).fontColor('#666666').layoutWeight(1)
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('自动样式预览').fontSize(10).fontColor('#666666')
+            Toggle({ type: ToggleType.Switch, isOn: this.autoStyled })
+              .onChange((on: boolean) => {
+                this.autoStyled = on;
+                if (on) {
+                  if (this.saveToSandbox()) {
+                    this.renderAssFrame(Math.round(this.currentMs), false);
+                  }
+                } else {
+                  this.subtitleImage = undefined;
+                }
+              })
+            Text(this.renderStatus).fontSize(9).fontColor('#999999').layoutWeight(1)
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Button('选中当前播放行').fontSize(10)
+              .enabled(this.hasDoc)
+              .onClick(() => { this.selectActiveEvent(); })
+            Text(this.videoStatus).fontSize(9).fontColor('#888888').layoutWeight(1)
+          }
+          .width('100%')
+
           if (this.videoUri !== '') {
             Row({ space: 4 }) {
               Column({ space: 2 }) {
@@ -1698,6 +1735,7 @@ struct Editor {
                 }
                 .width('100%')
                 .aspectRatio(16.0 / 9.0)
+                .constraintSize({ maxWidth: 640, maxHeight: 280 })
               }
               .layoutWeight(1)
               .alignItems(HorizontalAlign.Center)
@@ -1708,6 +1746,7 @@ struct Editor {
                   Image(this.subtitleImage)
                     .width('100%')
                     .aspectRatio(16.0 / 9.0)
+                    .constraintSize({ maxWidth: 640, maxHeight: 280 })
                     .objectFit(ImageFit.Contain)
                     .backgroundColor('#202020')
                 }
@@ -1723,54 +1762,20 @@ struct Editor {
             }
             .width('100%')
             .aspectRatio(16.0 / 9.0)
-            .constraintSize({ maxWidth: 640 })
+            .constraintSize({ maxWidth: 640, maxHeight: 280 })
             .justifyContent(FlexAlign.Center)
             .backgroundColor('#FFFFFF')
             .borderRadius(8)
           }
 
-          Row({ space: 6 }) {
-            Button('跳到选中行').fontSize(11)
-              .enabled(this.selected >= 0 && this.videoUri !== '')
-              .onClick(() => { this.seekSelected(); })
-            Button('样式渲染').fontSize(11)
-              .enabled(this.hasDoc)
-              .onClick(() => { this.renderStyled(); })
-            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${this.videoDuration}s`)
-              .fontSize(10).fontColor('#666666').layoutWeight(1)
-          }
-          .width('100%')
-
-          Row({ space: 6 }) {
-            Text('自动样式预览').fontSize(10).fontColor('#666666')
-            Toggle({ type: ToggleType.Switch, isOn: this.autoStyled })
-              .onChange((on: boolean) => {
-                this.autoStyled = on;
-                if (on) {
-                  if (this.saveToSandbox()) {
-                    this.renderAssFrame(Math.round(this.currentMs), false);
-                  }
-                } else {
-                  this.subtitleImage = undefined;
-                }
-              })
-            Text(this.renderStatus).fontSize(9).fontColor('#999999').layoutWeight(1)
-          }
-          .width('100%')
-
-          Button('选中当前播放行').fontSize(10)
-            .enabled(this.hasDoc)
-            .onClick(() => { this.selectActiveEvent(); })
-
-          Text(this.videoStatus).fontSize(10).fontColor('#888888').width('100%')
           if (this.renderStatus !== '') {
-            Text(this.renderStatus).fontSize(10).fontColor('#888888').width('100%')
+            Text(this.renderStatus).fontSize(9).fontColor('#888888').width('100%')
           }
         }
         .layoutWeight(1)
         .width('100%')
         .alignItems(HorizontalAlign.Center)
-      } else if (this.hasDoc && this.showStyles) {
+      } else if (this.hasDoc && this.showStyles) {      } else if (this.hasDoc && this.showStyles) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
             Text('样式').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
