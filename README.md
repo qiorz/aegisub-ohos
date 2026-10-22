@@ -1,5 +1,16 @@
 # Aegisub → HarmonyOS (OHOS) 移植
 
+> [!IMPORTANT]
+> **状态说明（置顶）**
+>
+> - **目前能用的功能很少**：只覆盖「台词编辑 / 打轴 / 样式 / 导出」这条主链路。
+>   字幕特效（`\pos`、`\move`、`\t` 等）、卡拉OK 模板、自动化脚本（Lua）、
+>   压缩音频波形、完整视频解码都还没有，离上游 Aegisub 差得很远；GUI 路线
+>   （ArkUI 重写 vs wxWidgets 后端）也尚未定案。
+> - **未做 UI 美化**：界面只做到“能操作”，没有视觉设计、没有动效，控件与布局都很朴素。
+> - **更新随缘**：个人业余项目，更新节奏不固定，issue / PR 可能长期不处理，不承诺任何时间点。
+> - **相关项目**：[HandBrake → HarmonyOS 移植](https://github.com/qiorz/handbrake-ohos)
+
 把 [Aegisub](https://github.com/TypesettingTools/Aegisub)（字幕编辑/打轴工具）移植到 HarmonyOS / OpenHarmony，
 产出可安装的 HAP。上游已由 `Aegisub/Aegisub` 迁移到 `TypesettingTools/Aegisub`。
 
@@ -72,6 +83,11 @@ bash scripts/run-tests-qemu.sh
 
 可安装的 HAP 放在 **Releases**。本项目只交付**未签名**包，签名证书需使用者自行申请
 （华为 AGC 签发，profile 需绑定你的设备 UDID）。
+
+## 相关项目
+
+- [HandBrake → HarmonyOS 移植](https://github.com/qiorz/handbrake-ohos) —— 视频转码引擎的 OHOS 移植，
+  与本项目同源思路（OHOS NDK 交叉编译 + ArkTS 外壳）。
 
 ## 许可
 
