@@ -295,6 +295,14 @@ struct Editor {
     return i >= 0 ? (s.fields[i] ?? '') : '';
   }
 
+  private styleOptions(): SelectOption[] {
+    const opts: SelectOption[] = [];
+    for (const name of this.styles) {
+      opts.push({ value: name });
+    }
+    return opts;
+  }
+
   private selectStyle(i: number): void {
     if (i < 0 || i >= this.styleEntries.length) {
       return;
@@ -443,6 +451,29 @@ struct Editor {
     }
     this.styles = names;
     this.status = `已新增样式 ${name}（未保存）`;
+  }
+
+  private deleteStyle(): void {
+    if (this.styleEntries.length <= 1) {
+      this.status = '至少保留一个样式';
+      return;
+    }
+    if (this.styleSelected < 0 || this.styleSelected >= this.styleEntries.length) {
+      return;
+    }
+    const removed = this.styleName(this.styleEntries[this.styleSelected]);
+    this.pushUndo();
+    const arr: AssStyleEntry[] = this.styleEntries.slice();
+    arr.splice(this.styleSelected, 1);
+    this.styleEntries = arr;
+    this.styleSelected = Math.min(this.styleSelected, arr.length - 1);
+    this.selectStyle(this.styleSelected);
+    const names: string[] = [];
+    for (const e of arr) {
+      names.push(this.styleName(e));
+    }
+    this.styles = names;
+    this.status = `已删除样式 ${removed}；引用它的行需手动改样式`;
   }
 
   private toggleStyles(): void {
@@ -1557,6 +1588,9 @@ struct Editor {
             Text('样式').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
             Button('新增样式').fontSize(10)
               .onClick(() => { this.addStyle(); })
+            Button('删除样式').fontSize(10)
+              .enabled(this.styleEntries.length > 1)
+              .onClick(() => { this.deleteStyle(); })
           }
           .width('100%')
           if (this.styleEntries.length === 0) {
@@ -1724,6 +1758,15 @@ struct Editor {
             Button('应用').fontSize(11).onClick(() => { this.applyEdit(); })
           }
           .width('100%')
+
+          if (this.styles.length > 0) {
+            Select(this.styleOptions())
+              .selected(Math.max(0, this.styles.indexOf(this.editStyle)))
+              .value(this.editStyle)
+              .onSelect((index: number, value: string) => {
+                this.editStyle = value;
+              })
+          }
 
           Row({ space: 4 }) {
             Button(this.editKind).layoutWeight(1).fontSize(10)
