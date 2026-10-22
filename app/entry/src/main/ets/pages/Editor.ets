@@ -99,6 +99,7 @@ struct Editor {
   @State editMarginV: string = '0';
   @State editEffect: string = '';
   @State showAdvanced: boolean = false;
+  @State filterText: string = '';
   @State showStyles: boolean = false;
   @State styleSection: string = '';
   @State stylePrefix: string = '';
@@ -237,6 +238,27 @@ struct Editor {
   private fieldIndex(name: string): number {
     const target = name.toLowerCase();
     return this.format.findIndex((v: string) => v.toLowerCase() === target);
+  }
+
+  private filteredEvents(): AssEvent[] {
+    const q = this.filterText.trim().toLowerCase();
+    if (q === '') {
+      return this.events;
+    }
+    const out: AssEvent[] = [];
+    const ai = this.fieldIndex('Name');
+    const si = this.styleIndex();
+    for (const e of this.events) {
+      const text = this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '';
+      const actor = ai >= 0 ? (e.fields[ai] ?? '') : '';
+      const style = si >= 0 ? (e.fields[si] ?? '') : '';
+      if (text.toLowerCase().includes(q) ||
+          actor.toLowerCase().includes(q) ||
+          style.toLowerCase().includes(q)) {
+        out.push(e);
+      }
+    }
+    return out;
   }
 
   private styleField(name: string): number {
@@ -588,6 +610,7 @@ struct Editor {
     this.subtitleImage = undefined;
     this.renderStatus = '';
     this.autoStyled = false;
+    this.filterText = '';
   }
 
   private loadSelected(): void {
@@ -891,9 +914,14 @@ struct Editor {
       this.applyEdit();
     }
     try {
+      try {
+        fs.copyFileSync(this.assPath, `${this.assPath}.bak`);
+      } catch (e) {
+        // first save: no previous file
+      }
       this.writeText(this.assPath, this.serialize());
       this.dirty = false;
-      this.status = `已保存：${this.assPath}`;
+      this.status = `已保存：${this.assPath}（旧版 .bak）`;
       return true;
     } catch (e) {
       this.status = `保存失败：${JSON.stringify(e)}`;
@@ -1311,12 +1339,21 @@ struct Editor {
         .layoutWeight(1)
         .width('100%')
       } else if (this.hasDoc) {
+        Row({ space: 4 }) {
+          TextInput({ text: this.filterText, placeholder: '搜索台词 / 角色 / 样式' })
+            .layoutWeight(1).fontSize(10)
+            .onChange((v: string) => { this.filterText = v; })
+          Button('清空').fontSize(10)
+            .onClick(() => { this.filterText = ''; })
+        }
+        .width('100%')
+
         List({ space: 3 }) {
-          ForEach(this.events, (e: AssEvent, i: number) => {
+          ForEach(this.filteredEvents(), (e: AssEvent) => {
             ListItem() {
               Column({ space: 2 }) {
                 Row({ space: 5 }) {
-                  Text(`${i + 1}`).fontSize(9).fontColor('#999999').width(22)
+                  Text(`${this.events.indexOf(e) + 1}`).fontSize(9).fontColor('#999999').width(22)
                   Text(this.startIndex >= 0 ? (e.fields[this.startIndex] ?? '') : '')
                     .fontSize(9).fontColor('#4263EB')
                   Text('→').fontSize(9).fontColor('#999999')
@@ -1331,12 +1368,12 @@ struct Editor {
               }
               .width('100%')
               .padding(6)
-              .backgroundColor(this.selected === i ? '#E7F0FF' : '#FFFFFF')
+              .backgroundColor(this.selected === this.events.indexOf(e) ? '#E7F0FF' : '#FFFFFF')
               .borderRadius(6)
               .alignItems(HorizontalAlign.Start)
             }
-            .onClick(() => { this.selectEvent(i); })
-          }, (e: AssEvent, i: number) => `${i}`)
+            .onClick(() => { this.selectEvent(this.events.indexOf(e)); })
+          }, (e: AssEvent) => `${this.events.indexOf(e)}`)
         }
         .layoutWeight(1)
         .width('100%')
