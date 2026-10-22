@@ -1,11 +1,9 @@
 /*
  * Aegisub OHOS -- first ArkUI shell.
  *
- * MVP scope: open an .ass/.ssa file through the system picker, parse its
- * [Events] table with libaegisub's agi::Time (native ass_lite.cpp), edit the
- * start/end/style/text of a line, and save/export.  Styling, video and audio
- * are intentionally not part of this page yet; the gtest harness remains on
- * pages/Index for diagnostics.
+ * ASS/SSA/SRT editor shell: parse with libaegisub's agi::Time (native
+ * ass_lite.cpp), edit events/styles, preview video/audio, export ASS/SRT and
+ * export an application log. The old gtest page was removed in v0.1.2.
  */
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs, picker, fileUri } from '@kit.CoreFileKit';
@@ -14,10 +12,11 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { image } from '@kit.ImageKit';
 import { media } from '@kit.MediaKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.2';
+const APP_VERSION = '0.1.3';
 
 interface AssEvent {
   kind: string;
@@ -639,7 +638,11 @@ struct Editor {
     const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
     const path = `${dir}/fonts.conf`;
     try {
-      fs.mkdirSync(dir, true);
+      try {
+        fs.mkdirSync(dir, true);
+      } catch (e) {
+        // already exists
+      }
       const cache = `${this.ctx.cacheDir}/fc-cache-v012`;
       try {
         fs.mkdirSync(cache, true);
@@ -656,6 +659,7 @@ struct Editor {
       this.fontConfigPath = path;
       return path;
     } catch (e) {
+      this.addLog(`ensureFontConfig failed: ${JSON.stringify(e)}`);
       return '';
     }
   }
@@ -1259,7 +1263,17 @@ struct Editor {
     const f = fs.openSync(path,
       fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
     try {
-      fs.writeSync(f.fd, text);
+      const bytes: Uint8Array = new util.TextEncoder().encodeInto(text);
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+        const chunk = new ArrayBuffer(bytes.byteLength - offset);
+        new Uint8Array(chunk).set(bytes.subarray(offset));
+        const written: number = fs.writeSync(f.fd, chunk);
+        if (written <= 0) {
+          throw new Error(`write stalled at ${offset}/${bytes.byteLength}`);
+        }
+        offset += written;
+      }
     } finally {
       fs.closeSync(f);
     }
@@ -1649,39 +1663,60 @@ struct Editor {
           .width('100%')
 
           if (this.videoUri !== '') {
-            Stack({ alignContent: Alignment.Bottom }) {
-              Video({ src: this.videoUri, controller: this.videoController })
+            Row({ space: 4 }) {
+              Column({ space: 2 }) {
+                Text('原视频').fontSize(9).fontColor('#888888')
+                Stack({ alignContent: Alignment.Bottom }) {
+                  Video({ src: this.videoUri, controller: this.videoController })
+                    .width('100%')
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
+                    .controls(true)
+                    .onPrepared((e: PreparedInfo) => {
+                      this.videoDuration = e.duration;
+                    })
+                    .onUpdate((e: PlaybackInfo) => {
+                      this.currentMs = e.time * 1000;
+                      this.updateActiveText();
+                      if (this.autoStyled) {
+                        this.maybeAutoRender();
+                      } else {
+                        this.subtitleImage = undefined;
+                      }
+                    })
+                    .onError(() => {
+                      this.videoStatus = '视频播放失败（格式或解码器不支持）';
+                    })
+                  Text(this.activeText)
+                    .fontSize(15)
+                    .fontColor('#FFFFFF')
+                    .backgroundColor('#B0000000')
+                    .width('100%')
+                    .padding(6)
+                    .textAlign(TextAlign.Center)
+                    .hitTestBehavior(HitTestMode.Transparent)
+                }
                 .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-                .controls(true)
-                .onPrepared((e: PreparedInfo) => {
-                  this.videoDuration = e.duration;
-                })
-                .onUpdate((e: PlaybackInfo) => {
-                  this.currentMs = e.time * 1000;
-                  this.updateActiveText();
-                  if (this.autoStyled) {
-                    this.maybeAutoRender();
-                  } else {
-                    this.subtitleImage = undefined;
-                  }
-                })
-                .onError(() => {
-                  this.videoStatus = '视频播放失败（格式或解码器不支持）';
-                })
-              Text(this.activeText)
-                .fontSize(15)
-                .fontColor('#FFFFFF')
-                .backgroundColor('#B0000000')
-                .width('100%')
-                .padding(6)
-                .textAlign(TextAlign.Center)
-                .hitTestBehavior(HitTestMode.Transparent)
+                .aspectRatio(16.0 / 9.0)
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Center)
+
+              if (this.subtitleImage !== undefined) {
+                Column({ space: 2 }) {
+                  Text('样式预览').fontSize(9).fontColor('#888888')
+                  Image(this.subtitleImage)
+                    .width('100%')
+                    .aspectRatio(16.0 / 9.0)
+                    .objectFit(ImageFit.Contain)
+                    .backgroundColor('#202020')
+                }
+                .layoutWeight(1)
+                .alignItems(HorizontalAlign.Center)
+              }
             }
             .width('100%')
-            .aspectRatio(16.0 / 9.0)
-            .constraintSize({ maxWidth: 640 })
+            .alignItems(VerticalAlign.Top)
           } else {
             Column() {
               Text('选择 MP4 / MKV / TS 预览字幕').fontSize(12).fontColor('#888888')
@@ -1692,16 +1727,6 @@ struct Editor {
             .justifyContent(FlexAlign.Center)
             .backgroundColor('#FFFFFF')
             .borderRadius(8)
-          }
-
-          if (this.subtitleImage !== undefined) {
-            Text('样式渲染预览（外置）').fontSize(9).fontColor('#888888').width('100%')
-            Image(this.subtitleImage)
-              .width('100%')
-              .aspectRatio(16.0 / 9.0)
-              .constraintSize({ maxWidth: 640 })
-              .objectFit(ImageFit.Contain)
-              .backgroundColor('#202020')
           }
 
           Row({ space: 6 }) {
