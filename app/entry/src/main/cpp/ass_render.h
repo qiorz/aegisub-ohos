@@ -15,4 +15,5 @@ struct RenderedFrame {
 // Render one ASS frame at timeMs using libass. fontPath must point to a real
 // TTF/OTF; libass is built without fontconfig, so all styles use this font.
 RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
-                             int width, int height, const std::string& fontPath);
+                             int width, int height, const std::string& fontPath,
+                             const std::string& fontConfigPath);

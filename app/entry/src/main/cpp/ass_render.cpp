@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 
@@ -14,7 +15,8 @@ std::mutex g_render_mutex;
 } // namespace
 
 RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
-                             int width, int height, const std::string& fontPath) {
+                             int width, int height, const std::string& fontPath,
+                             const std::string& fontConfigPath) {
     RenderedFrame out;
     out.width = width;
     out.height = height;
@@ -37,7 +39,13 @@ RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
     }
     ass_set_frame_size(ren, width, height);
     ass_set_pixel_aspect(ren, 1.0);
-    ass_set_fonts(ren, fontPath.c_str(), "Sans", 0, nullptr, 1);
+    const bool use_fontconfig = !fontConfigPath.empty();
+    if (use_fontconfig) {
+        setenv("FONTCONFIG_FILE", fontConfigPath.c_str(), 1);
+        ass_set_fonts(ren, nullptr, "sans-serif", ASS_FONTPROVIDER_FONTCONFIG, nullptr, 1);
+    } else {
+        ass_set_fonts(ren, fontPath.c_str(), "Sans", 0, nullptr, 1);
+    }
 
     ASS_Track* track = ass_read_file(lib, assPath.c_str(), nullptr);
     if (!track) {
@@ -49,6 +57,11 @@ RenderedFrame RenderAssFrame(const std::string& assPath, int timeMs,
 
     int changed = 0;
     ASS_Image* img = ass_render_frame(ren, track, timeMs, &changed);
+    if (use_fontconfig && !img) {
+        // No font matched; fall back to the bundled font.
+        ass_set_fonts(ren, fontPath.c_str(), "Sans", 0, nullptr, 1);
+        img = ass_render_frame(ren, track, timeMs, &changed);
+    }
     out.pixels.assign(static_cast<size_t>(width) * height * 4, 0);
 
     for (ASS_Image* im = img; im; im = im->next) {

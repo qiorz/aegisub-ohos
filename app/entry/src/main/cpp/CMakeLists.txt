@@ -61,6 +61,8 @@ set(AEGISUB_STATIC_LIBS
     ${AEGISUB_PREFIX}/lib/libicudata.a
     ${AEGISUB_PREFIX}/lib/libluajit-5.1.a
     ${AEGISUB_PREFIX}/lib/libass.a
+    ${AEGISUB_PREFIX}/lib/libfontconfig.a
+    ${AEGISUB_PREFIX}/lib/libexpat.a
     ${AEGISUB_PREFIX}/lib/libharfbuzz.a
     ${AEGISUB_PREFIX}/lib/libfribidi.a
     ${AEGISUB_PREFIX}/lib/libfreetype.a

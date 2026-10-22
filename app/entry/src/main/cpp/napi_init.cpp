@@ -192,11 +192,12 @@ napi_value NormalizeTime(napi_env env, napi_callback_info info) {
 
 
 napi_value RenderAss(napi_env env, napi_callback_info info) {
-    size_t argc = 5;
-    napi_value args[5] = {nullptr};
+    size_t argc = 6;
+    napi_value args[6] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     char ass_path[1024] = {0};
     char font_path[1024] = {0};
+    char font_config[1024] = {0};
     int32_t time_ms = 0, width = 0, height = 0;
     if (argc < 5 ||
         napi_get_value_string_utf8(env, args[0], ass_path, sizeof ass_path, nullptr) != napi_ok ||
@@ -204,10 +205,13 @@ napi_value RenderAss(napi_env env, napi_callback_info info) {
         napi_get_value_int32(env, args[2], &width) != napi_ok ||
         napi_get_value_int32(env, args[3], &height) != napi_ok ||
         napi_get_value_string_utf8(env, args[4], font_path, sizeof font_path, nullptr) != napi_ok) {
-        napi_throw_type_error(env, nullptr, "renderAss(path, timeMs, width, height, fontPath)");
+        napi_throw_type_error(env, nullptr, "renderAss(path, timeMs, width, height, fontPath, fontConfig)");
         return nullptr;
     }
-    RenderedFrame frame = RenderAssFrame(ass_path, time_ms, width, height, font_path);
+    if (argc >= 6) {
+        napi_get_value_string_utf8(env, args[5], font_config, sizeof font_config, nullptr);
+    }
+    RenderedFrame frame = RenderAssFrame(ass_path, time_ms, width, height, font_path, font_config);
     if (!frame.ok) {
         napi_throw_error(env, nullptr, frame.error.c_str());
         return nullptr;

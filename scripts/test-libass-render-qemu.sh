@@ -20,7 +20,8 @@ cat > "$WS/build/ass-render-test-main.cpp" <<'EOF'
 #include <cstdlib>
 int main(int argc, char** argv) {
     if (argc < 4) return 2;
-    RenderedFrame f = RenderAssFrame(argv[1], std::atoi(argv[2]), 640, 360, argv[3]);
+    RenderedFrame f = RenderAssFrame(argv[1], std::atoi(argv[2]), 640, 360,
+                                     argv[3], argc > 4 ? argv[4] : "");
     if (!f.ok) {
         std::fprintf(stderr, "render failed: %s\n", f.error.c_str());
         return 1;
@@ -41,7 +42,8 @@ $OHOS_CXX --target=aarch64-linux-ohos --sysroot="$OHOS_SYSROOT" \
     "$WS/build/ass-render-test-main.cpp" \
     "$WS/app/entry/src/main/cpp/ass_render.cpp" \
     -Wl,--start-group \
-    "$PREFIX/lib/libass.a" "$PREFIX/lib/libharfbuzz.a" \
+    "$PREFIX/lib/libass.a" "$PREFIX/lib/libfontconfig.a" \
+    "$PREFIX/lib/libexpat.a" "$PREFIX/lib/libharfbuzz.a" \
     "$PREFIX/lib/libfribidi.a" "$PREFIX/lib/libfreetype.a" \
     "$PREFIX/lib/libz.a" \
     -Wl,--end-group -pthread -lm -o "$OUT"
@@ -61,5 +63,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,libass render ok
 EOF
 
-echo "=== render at 2s ==="
+echo "=== render at 2s (bundled-font fallback) ==="
 qemu-aarch64-static "$OUT" "$DATA/sample.ass" 2000 "$FONT"
+
+cat > "$DATA/fonts.conf" <<'FONTCONF'
+<?xml version="1.0"?>
+<fontconfig>
+  <dir>/usr/share/fonts</dir>
+  <cachedir>/tmp/fc-cache</cachedir>
+</fontconfig>
+FONTCONF
+echo "=== render at 2s (fontconfig) ==="
+qemu-aarch64-static "$OUT" "$DATA/sample.ass" 2000 "$FONT" "$DATA/fonts.conf"

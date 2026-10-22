@@ -20,6 +20,7 @@ export const msToTime: (ms: number) => string;
 
 /** Render one ASS frame with libass into RGBA8. */
 export const renderAss: (assPath: string, timeMs: number, width: number,
-                         height: number, fontPath: string) => RenderedFrame;
+                         height: number, fontPath: string,
+                         fontConfigPath: string) => RenderedFrame;
 
 export const version: () => string;

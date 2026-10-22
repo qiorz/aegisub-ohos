@@ -343,6 +343,36 @@ struct Editor {
     return dest;
   }
 
+  private ensureFontConfig(): string {
+    const dir = `${this.ctx.cacheDir}/aegisub-fonts`;
+    const path = `${dir}/fonts.conf`;
+    try {
+      if (fs.accessSync(path)) {
+        return path;
+      }
+    } catch (e) {
+      // not generated yet
+    }
+    try {
+      fs.mkdirSync(dir, true);
+      const cache = `${this.ctx.cacheDir}/fc-cache`;
+      try {
+        fs.mkdirSync(cache, true);
+      } catch (e) {
+        // exists
+      }
+      const xml = '<?xml version="1.0"?>\n' +
+        '<fontconfig>\n' +
+        '  <dir>/system/fonts</dir>\n' +
+        `  <cachedir>${cache}</cachedir>\n` +
+        '</fontconfig>\n';
+      this.writeText(path, xml);
+      return path;
+    } catch (e) {
+      return '';
+    }
+  }
+
   async renderStyled(): Promise<void> {
     await this.renderAssFrame(Math.round(this.currentMs), true);
   }
@@ -357,8 +387,9 @@ struct Editor {
     this.renderBusy = true;
     try {
       const font = this.ensureFont();
+      const fontConfig = this.ensureFontConfig();
       const frame: RenderedFrame = aegisub.renderAss(
-        this.assPath, timeMs, 640, 360, font);
+        this.assPath, timeMs, 640, 360, font, fontConfig);
       const opts: image.InitializationOptions = {
         size: { width: frame.width, height: frame.height },
         pixelFormat: image.PixelMapFormat.RGBA_8888,
