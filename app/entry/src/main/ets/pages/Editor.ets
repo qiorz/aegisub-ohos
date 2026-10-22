@@ -640,7 +640,7 @@ struct Editor {
     const path = `${dir}/fonts.conf`;
     try {
       fs.mkdirSync(dir, true);
-      const cache = `${this.ctx.cacheDir}/fc-cache`;
+      const cache = `${this.ctx.cacheDir}/fc-cache-v012`;
       try {
         fs.mkdirSync(cache, true);
       } catch (e) {
