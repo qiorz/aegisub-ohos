@@ -29,6 +29,14 @@ interface AssStyleEntry {
   fields: string[];
 }
 
+interface WaveformResult {
+  ok: boolean;
+  sampleRate?: number;
+  channels?: number;
+  peaks?: number[];
+  error?: string;
+}
+
 interface FontListResult {
   ok: boolean;
   fonts?: string[];
@@ -108,6 +116,8 @@ struct Editor {
   @State audioStatus: string = '选择音频做打轴';
   @State audioDuration: number = 0;
   @State audioPlaying: boolean = false;
+  @State waveformPeaks: number[] = [];
+  @State waveformStatus: string = '';
   @State showStyles: boolean = false;
   @State styleSection: string = '';
   @State stylePrefix: string = '';
@@ -580,6 +590,24 @@ struct Editor {
       const ext = dot > 0 ? name.substring(dot) : '.mp3';
       const dest = `${dir}/audio-${stamp()}${ext}`;
       this.copyTo(uris[0], dest);
+      this.waveformPeaks = [];
+      this.waveformStatus = '';
+      if (name.toLowerCase().endsWith('.wav')) {
+        try {
+          const raw: string = aegisub.waveform(dest, 200);
+          const result: WaveformResult = JSON.parse(raw) as WaveformResult;
+          if (result.ok) {
+            this.waveformPeaks = result.peaks ?? [];
+            this.waveformStatus = `波形 ${this.waveformPeaks.length} 段`;
+          } else {
+            this.waveformStatus = `波形解析失败：${result.error ?? 'unknown'}`;
+          }
+        } catch (we) {
+          this.waveformStatus = `波形解析失败：${JSON.stringify(we)}`;
+        }
+      } else {
+        this.waveformStatus = '波形仅支持 WAV；当前格式仍可播放/打轴';
+      }
       if (this.audioPlayer !== undefined) {
         try {
           await this.audioPlayer.release();
@@ -1304,6 +1332,24 @@ struct Editor {
           .width('100%')
 
           Text(this.audioStatus).fontSize(10).fontColor('#888888').width('100%')
+
+          if (this.waveformPeaks.length > 0) {
+            Row({ space: 0 }) {
+              ForEach(this.waveformPeaks, (v: number, i: number) => {
+                Column()
+                  .width(1.5)
+                  .height(Math.max(1, v * 70))
+                  .backgroundColor('#4263EB')
+              }, (v: number, i: number) => `${i}`)
+            }
+            .width('100%')
+            .height(70)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(VerticalAlign.Bottom)
+          }
+          if (this.waveformStatus !== '') {
+            Text(this.waveformStatus).fontSize(9).fontColor('#999999').width('100%')
+          }
 
           if (this.audioPath !== '') {
             Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${(this.audioDuration / 1000).toFixed(2)}s`)

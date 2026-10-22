@@ -2,6 +2,7 @@
 
 #include "ass_lite.h"
 #include "ass_render.h"
+#include "waveform.h"
 #include "test_runner.h"
 
 #include <atomic>
@@ -191,6 +192,23 @@ napi_value NormalizeTime(napi_env env, napi_callback_info info) {
 }
 
 
+napi_value Waveform(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    int32_t buckets = 200;
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "waveform(path: string, buckets?: number)");
+        return nullptr;
+    }
+    if (argc >= 2) napi_get_value_int32(env, args[1], &buckets);
+    std::string out = WaveformJson(path, buckets);
+    napi_value result;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value ListFonts(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -260,6 +278,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"msToTime", nullptr, MsToTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"renderAss", nullptr, RenderAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"listFonts", nullptr, ListFonts, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"waveform", nullptr, Waveform, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

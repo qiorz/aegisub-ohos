@@ -22,6 +22,7 @@ add_library(aegisubtest SHARED
     napi_init.cpp
     ass_lite.cpp
     ass_render.cpp
+    waveform.cpp
     test_runner.cpp
     ${AEGISUB_SRC}/tests/support/util.cpp
     ${TEST_SOURCES})

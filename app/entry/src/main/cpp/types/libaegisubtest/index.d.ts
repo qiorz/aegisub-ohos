@@ -24,6 +24,17 @@ export interface FontListResult {
   error?: string;
 }
 
+export interface WaveformResult {
+  ok: boolean;
+  sampleRate?: number;
+  channels?: number;
+  peaks?: number[];
+  error?: string;
+}
+
+/** Compute PCM WAV peak buckets (0..1) for a waveform display. */
+export const waveform: (path: string, buckets?: number) => string;
+
 /** Enumerate font families via fontconfig. */
 export const listFonts: (fontConfigPath: string) => string;
 
