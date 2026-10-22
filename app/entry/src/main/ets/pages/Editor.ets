@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.1.8';
+const APP_VERSION = '0.1.9';
 
 interface AssEvent {
   kind: string;
@@ -1065,6 +1065,35 @@ struct Editor {
   }
 
   /** ASS is line-oriented; a real newline in TextArea must become \N. */
+  private applyLineTag(open: string, close: string): void {
+    const text = this.editText;
+    if (text.startsWith(open) && text.endsWith(close) &&
+        text.length >= open.length + close.length) {
+      this.editText = text.substring(open.length, text.length - close.length);
+      this.status = '已移除行标签';
+    } else {
+      this.editText = open + text + close;
+      this.status = '已插入行标签；点“应用”写入';
+    }
+  }
+
+  private clearLineTags(): void {
+    let out = '';
+    let depth = 0;
+    for (let i = 0; i < this.editText.length; i++) {
+      const c = this.editText.charAt(i);
+      if (c === '{') {
+        depth++;
+      } else if (c === '}' && depth > 0) {
+        depth--;
+      } else if (depth === 0) {
+        out += c;
+      }
+    }
+    this.editText = out;
+    this.status = '已清除行内标签';
+  }
+
   private sanitizeText(t: string): string {
     let out = t.split('\r\n').join('\\N');
     out = out.split('\r').join('\\N');
@@ -2097,6 +2126,32 @@ struct Editor {
             .fontSize(12)
             .width('100%')
             .onChange((v: string) => { this.editText = v; })
+
+          Row({ space: 3 }) {
+            Button('粗体').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\b1}', '{\\b0}'); })
+            Button('斜体').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\i1}', '{\\i0}'); })
+            Button('下划线').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\u1}', '{\\u0}'); })
+            Button('删除线').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\s1}', '{\\s0}'); })
+            Button('清标签').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.clearLineTags(); })
+          }
+          .width('100%')
+
+          Row({ space: 3 }) {
+            Button('主色红').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\c&H0000FF&}', '{\\r}'); })
+            Button('主色黄').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\c&H00FFFF&}', '{\\r}'); })
+            Button('描边红').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\3c&H0000FF&}', '{\\r}'); })
+            Button('描边蓝').layoutWeight(1).fontSize(9)
+              .onClick(() => { this.applyLineTag('{\\3c&HFF0000&}', '{\\r}'); })
+          }
+          .width('100%')
 
           if (this.showAdvanced) {
             Row({ space: 4 }) {
