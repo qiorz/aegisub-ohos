@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 
 interface AssEvent {
   kind: string;
@@ -119,6 +119,15 @@ struct Editor {
   @State showAdvanced: boolean = false;
   @State filterText: string = '';
   @State showAudio: boolean = false;
+  @State showCache: boolean = false;
+  @State cacheTotal: number = 0;
+  @State cacheVideo: number = 0;
+  @State cacheAudio: number = 0;
+  @State cacheAss: number = 0;
+  @State cacheLogs: number = 0;
+  @State cacheFonts: number = 0;
+  @State cacheTemp: number = 0;
+  @State cacheStatus: string = '';
   @State audioName: string = '';
   @State audioPath: string = '';
   @State audioStatus: string = '选择音频做打轴';
@@ -203,6 +212,170 @@ struct Editor {
       this.logLines.shift();
     }
     hilog.info(0xFF01, TAG, '%{public}s', msg);
+  }
+
+  private sizeText(n: number): string {
+    if (n >= 1024 * 1024 * 1024) {
+      return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    }
+    if (n >= 1024 * 1024) {
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    if (n >= 1024) {
+      return `${(n / 1024).toFixed(1)} KB`;
+    }
+    return `${n} B`;
+  }
+
+  private dirSize(path: string): number {
+    let total = 0;
+    try {
+      const names: string[] = fs.listFileSync(path);
+      for (const name of names) {
+        const full = `${path}/${name}`;
+        const st = fs.statSync(full);
+        total += st.isDirectory() ? this.dirSize(full) : st.size;
+      }
+    } catch (e) {
+      // missing directory
+    }
+    return total;
+  }
+
+  private clearDir(path: string, keep: string[]): void {
+    try {
+      const names: string[] = fs.listFileSync(path);
+      for (const name of names) {
+        const full = `${path}/${name}`;
+        if (keep.indexOf(full) >= 0) {
+          continue;
+        }
+        try {
+          const st = fs.statSync(full);
+          if (st.isDirectory()) {
+            this.clearDir(full, []);
+            fs.rmdirSync(full);
+          } else {
+            fs.unlinkSync(full);
+          }
+        } catch (e) {
+          // locked/vanished entry
+        }
+      }
+    } catch (e) {
+      // missing directory
+    }
+  }
+
+  private refreshCache(): void {
+    this.cacheVideo = this.dirSize(`${this.ctx.filesDir}/video`);
+    this.cacheAudio = this.dirSize(`${this.ctx.filesDir}/audio`);
+    this.cacheAss = this.dirSize(`${this.ctx.filesDir}/ass`);
+    this.cacheLogs = this.dirSize(`${this.ctx.filesDir}/logs`);
+    this.cacheFonts = this.dirSize(`${this.ctx.cacheDir}/aegisub-fonts`);
+    this.cacheTemp = this.dirSize(`${this.ctx.cacheDir}/fc-cache-v012`) +
+      this.dirSize(`${this.ctx.cacheDir}/fc-cache`) +
+      this.dirSize(`${this.ctx.cacheDir}/aegisub-tests`);
+    this.cacheTotal = this.cacheVideo + this.cacheAudio + this.cacheAss +
+      this.cacheLogs + this.cacheFonts + this.cacheTemp;
+  }
+
+  private openCache(): void {
+    this.showCache = true;
+    this.showStyles = false;
+    this.showVideo = false;
+    this.showAudio = false;
+    this.refreshCache();
+    this.cacheStatus = '缓存统计已刷新';
+  }
+
+  private clearVideoCache(): void {
+    try {
+      this.videoController.stop();
+    } catch (e) {
+      // not prepared
+    }
+    this.videoUri = '';
+    this.videoPath = '';
+    this.videoName = '';
+    this.videoDuration = 0;
+    this.pendingSeekMs = -1;
+    this.subtitleImage = undefined;
+    this.showVideo = false;
+    this.clearDir(`${this.ctx.filesDir}/video`, []);
+    this.refreshCache();
+    this.cacheStatus = '已清理视频副本';
+  }
+
+  private clearAudioCache(): void {
+    if (this.audioPlayer !== undefined) {
+      const player = this.audioPlayer;
+      this.audioPlayer = undefined;
+      player.release().catch(() => {
+        // already released
+      });
+    }
+    this.audioPath = '';
+    this.audioName = '';
+    this.audioStatus = '选择音频做打轴';
+    this.audioPlaying = false;
+    this.audioDuration = 0;
+    this.waveformPeaks = [];
+    this.waveformStatus = '';
+    this.showAudio = false;
+    this.clearDir(`${this.ctx.filesDir}/audio`, []);
+    this.refreshCache();
+    this.cacheStatus = '已清理音频副本';
+  }
+
+  private clearAssCache(): void {
+    const keep: string[] = [];
+    if (this.assPath !== '') {
+      keep.push(this.assPath);
+      keep.push(`${this.assPath}.bak`);
+    }
+    this.clearDir(`${this.ctx.filesDir}/ass`, keep);
+    this.refreshCache();
+    this.cacheStatus = '已清理旧字幕副本（保留当前文件）';
+  }
+
+  private clearLogCache(): void {
+    this.clearDir(`${this.ctx.filesDir}/logs`, []);
+    this.refreshCache();
+    this.cacheStatus = '已清理日志';
+  }
+
+  private clearFontCache(): void {
+    this.clearDir(`${this.ctx.cacheDir}/aegisub-fonts`, []);
+    this.fontsReady = false;
+    this.fontConfigPath = '';
+    this.refreshCache();
+    this.cacheStatus = '已清理字体，下次渲染会重新解压';
+  }
+
+  private clearTempCache(): void {
+    this.clearDir(`${this.ctx.cacheDir}/aegisub-tests`, []);
+    this.clearDir(`${this.ctx.cacheDir}/fc-cache-v012`, []);
+    this.clearDir(`${this.ctx.cacheDir}/fc-cache`, []);
+    try {
+      fs.mkdirSync(`${this.ctx.cacheDir}/fc-cache-v012`, true);
+    } catch (e) {
+      // exists
+    }
+    this.fontConfigPath = '';
+    this.refreshCache();
+    this.cacheStatus = '已清理测试/索引缓存';
+  }
+
+  private clearAllCache(): void {
+    this.clearVideoCache();
+    this.clearAudioCache();
+    this.clearAssCache();
+    this.clearLogCache();
+    this.clearFontCache();
+    this.clearTempCache();
+    this.refreshCache();
+    this.cacheStatus = '已清理全部缓存（当前字幕保留）';
   }
 
   async exportLog(): Promise<void> {
@@ -571,6 +744,7 @@ struct Editor {
     if (this.showVideo) {
       this.showStyles = false;
       this.showAudio = false;
+      this.showCache = false;
       this.updateActiveText();
     }
   }
@@ -747,6 +921,18 @@ struct Editor {
       const dot = name.lastIndexOf('.');
       const ext = dot > 0 ? name.substring(dot) : '.mp4';
       const dest = `${dir}/video-${stamp()}${ext}`;
+      try {
+        this.videoController.stop();
+      } catch (e) {
+        // not prepared
+      }
+      this.videoUri = '';
+      this.videoPath = '';
+      this.videoDuration = 0;
+      this.subtitleImage = undefined;
+      this.pendingSeekMs = -1;
+      this.videoStatus = '正在复制视频…';
+      this.clearDir(dir, []);
       this.copyTo(uris[0], dest);
       this.videoFps = 25;
       this.videoFpsSource = '默认';
@@ -789,6 +975,7 @@ struct Editor {
     if (this.showAudio) {
       this.showStyles = false;
       this.showVideo = false;
+      this.showCache = false;
       this.updateActiveText();
     }
   }
@@ -818,6 +1005,19 @@ struct Editor {
       const dot = name.lastIndexOf('.');
       const ext = dot > 0 ? name.substring(dot) : '.mp3';
       const dest = `${dir}/audio-${stamp()}${ext}`;
+      if (this.audioPlayer !== undefined) {
+        try {
+          await this.audioPlayer.release();
+        } catch (e) {
+          // already released
+        }
+        this.audioPlayer = undefined;
+      }
+      this.audioPath = '';
+      this.audioName = '';
+      this.audioPlaying = false;
+      this.audioDuration = 0;
+      this.clearDir(dir, []);
       this.copyTo(uris[0], dest);
       this.waveformPeaks = [];
       this.waveformStatus = '';
@@ -836,14 +1036,6 @@ struct Editor {
         }
       } else {
         this.waveformStatus = '波形仅支持 WAV；当前格式仍可播放/打轴';
-      }
-      if (this.audioPlayer !== undefined) {
-        try {
-          await this.audioPlayer.release();
-        } catch (e) {
-          // already released
-        }
-        this.audioPlayer = undefined;
       }
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
@@ -1025,6 +1217,7 @@ struct Editor {
     this.autoStyled = false;
     this.filterText = '';
     this.showAudio = false;
+    this.showCache = false;
   }
 
   private loadSelected(): void {
@@ -1442,6 +1635,7 @@ struct Editor {
       }
       this.assPath = dest;
       this.fileName = isSrt ? `${name.substring(0, name.length - 4)}.ass` : name;
+      this.clearDir(dir, [dest, `${dest}.bak`]);
       this.applyDoc(d);
       this.resetHistory();
       this.status = isSrt
@@ -1656,6 +1850,7 @@ struct Editor {
             this.showStyles = false;
             this.showVideo = false;
             this.showAudio = false;
+            this.showCache = false;
           })
         Button('样式')
           .layoutWeight(1).height(28).fontSize(10).padding(0)
@@ -1665,6 +1860,7 @@ struct Editor {
             this.showStyles = true;
             this.showVideo = false;
             this.showAudio = false;
+            this.showCache = false;
             if (this.styleEntries.length > 0 && this.styleSelected < 0) {
               this.selectStyle(0);
             }
@@ -1682,6 +1878,9 @@ struct Editor {
         Button('日志')
           .layoutWeight(1).height(28).fontSize(10).padding(0)
           .onClick(() => { this.exportLog(); })
+        Button('缓存')
+          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .onClick(() => { this.openCache(); })
       }
       .width('100%')
 
@@ -1692,7 +1891,76 @@ struct Editor {
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      if (this.hasDoc && this.showAudio) {
+      if (this.showCache) {
+        Column({ space: 5 }) {
+          Row({ space: 6 }) {
+            Text('沙箱缓存').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
+            Button('刷新').fontSize(10).height(24).padding(0)
+              .onClick(() => { this.refreshCache(); this.cacheStatus = '已刷新'; })
+          }
+          .width('100%')
+
+          Text(`总占用 ${this.sizeText(this.cacheTotal)}`).fontSize(12)
+            .fontColor('#4263EB').width('100%')
+
+          Row({ space: 6 }) {
+            Text('视频副本').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheVideo)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearVideoCache(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('音频副本').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheAudio)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearAudioCache(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('字幕副本/备份').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheAss)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearAssCache(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('导出日志').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheLogs)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearLogCache(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('字体文件').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheFonts)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearFontCache(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
+            Text('测试/索引缓存').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheTemp)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearTempCache(); })
+          }
+          .width('100%')
+
+          Button('清理全部（保留当前字幕）').fontSize(10).height(28)
+            .onClick(() => { this.clearAllCache(); })
+
+          Text('当前打开的字幕不会被删除；字体清理后下次渲染会自动重新解压。')
+            .fontSize(9).fontColor('#999999').width('100%')
+          Text(this.cacheStatus).fontSize(10).fontColor('#888888').width('100%')
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else if (this.hasDoc && this.showAudio) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
             Button('选择音频').fontSize(11)
