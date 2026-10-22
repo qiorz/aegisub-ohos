@@ -107,10 +107,40 @@ napi_value LoadAss(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value LoadSrt(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "loadSrt(path: string) requires a string");
+        return nullptr;
+    }
+    std::string json = LoadSrtJson(path);
+    napi_value result;
+    napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value NewAss(napi_env env, napi_callback_info /*info*/) {
     std::string json = NewAssJson();
     napi_value result;
     napi_create_string_utf8(env, json.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
+napi_value SrtTime(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char text[256] = {0};
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], text, sizeof text, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "srtTime(text: string) requires a string");
+        return nullptr;
+    }
+    std::string out = NormalizeSrtTime(text);
+    napi_value result;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &result);
     return result;
 }
 
@@ -134,6 +164,8 @@ napi_value Init(napi_env env, napi_value exports) {
         {"runTests", nullptr, RunTests, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"loadAss", nullptr, LoadAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"newAss", nullptr, NewAss, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"loadSrt", nullptr, LoadSrt, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"srtTime", nullptr, SrtTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

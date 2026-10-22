@@ -18,11 +18,14 @@ cat > "$WS/build/ass-lite-test-main.cpp" <<'EOF'
 #include <cstdio>
 int main(int argc, char** argv) {
     if (argc < 2) return 2;
-    std::string j = LoadAssJson(argv[1]);
+    std::string path = argv[1];
+    bool is_srt = path.size() >= 4 && path.substr(path.size() - 4) == ".srt";
+    std::string j = is_srt ? LoadSrtJson(path) : LoadAssJson(path);
     std::fwrite(j.data(), 1, j.size(), stdout);
     std::fputc('\n', stdout);
     std::printf("NORM:%s\n", NormalizeAssTime("1:02.5").c_str());
     std::printf("NORM_BAD:%s\n", NormalizeAssTime("abc").c_str());
+    std::printf("SRT:%s\n", NormalizeSrtTime("0:00:01.00").c_str());
     return 0;
 }
 EOF
@@ -77,6 +80,17 @@ for i in range(1000):
     lines.append(f'Dialogue: 0,0:{m:02d}:{s:02d}.00,0:{m:02d}:{s:02d}.50,Default,A{i % 7},0,0,0,,Line {i}, with comma, and \\Nbreak')
 lines += ['', '[Fonts]', 'fontname: stress.ttf']
 (d / 'stress.ass').write_bytes(b'\xef\xbb\xbf' + ('\r\n'.join(lines) + '\r\n').encode())
+
+srt = """1
+00:00:01,000 --> 00:00:03,500
+Hello, SRT
+second line
+
+2
+00:00:04,000 --> 00:00:05,250
+Bye
+"""
+(d / 'sample.srt').write_text(srt, encoding='utf-8')
 PY
 
 echo "=== sample roundtrip ==="
@@ -130,6 +144,20 @@ assert a['footer'] == b['footer']
 assert b['styleEntries'][0]['fields'][1] == 'Noto Sans'
 assert b['styleEntries'][0]['fields'][2] == '64'
 assert b['styleEntries'][0]['fields'][3] == '&H00112233'
+PY
+
+echo "=== SRT import ==="
+qemu-aarch64-static "$OUT" "$DATA/sample.srt" > "$DATA/srt1.json"
+grep -q '^SRT:00:00:01,000$' "$DATA/srt1.json"
+python3 - "$DATA/srt1.json" <<'PY'
+import json, sys
+d = json.loads(open(sys.argv[1], encoding='utf-8').read().splitlines()[0])
+assert len(d['events']) == 2
+assert d['events'][0]['startMs'] == 1000 and d['events'][0]['endMs'] == 3500
+assert d['events'][0]['fields'][d['textIndex']] == 'Hello, SRT\\Nsecond line'
+assert d['events'][1]['endMs'] == 5250
+assert d['events'][1]['fields'][d['textIndex']] == 'Bye'
+print('PASS: SRT import (2 cues, multiline, centisecond times)')
 PY
 
 echo "=== 1000-line CRLF/BOM roundtrip ==="

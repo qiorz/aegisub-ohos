@@ -385,29 +385,8 @@ Doc parse_ass(const std::string& content_in) {
     return d;
 }
 
-} // namespace
 
-std::string LoadAssJson(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
-        return error_json("cannot open " + path);
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    if (!in.good() && !in.eof())
-        return error_json("cannot read " + path);
-    return to_json(parse_ass(ss.str()));
-}
-
-std::string NormalizeAssTime(const std::string& text) {
-    bool has_digit = false;
-    for (unsigned char c : text)
-        if (std::isdigit(c)) { has_digit = true; break; }
-    if (!has_digit)
-        return text;
-    return agi::Time(text).GetAssFormatted();
-}
-
-std::string NewAssJson() {
+Doc make_default_doc(bool add_event) {
     Doc d;
     d.eol = "\n";
     d.header =
@@ -442,18 +421,126 @@ std::string NewAssJson() {
     d.start_index = 1;
     d.end_index = 2;
     d.text_index = 9;
+    if (add_event) {
+        Event e;
+        e.kind = "Dialogue";
+        e.fields = {
+            "0",
+            agi::Time(0).GetAssFormatted(),
+            agi::Time(2000).GetAssFormatted(),
+            "Default", "", "0", "0", "0", "",
+            "New line"
+        };
+        e.start_ms = 0;
+        e.end_ms = 2000;
+        d.events.push_back(std::move(e));
+    }
+    return d;
+}
 
-    Event e;
-    e.kind = "Dialogue";
-    e.fields = {
-        "0",
-        agi::Time(0).GetAssFormatted(),
-        agi::Time(2000).GetAssFormatted(),
-        "Default", "", "0", "0", "0", "",
-        "New line"
-    };
-    e.start_ms = 0;
-    e.end_ms = 2000;
-    d.events.push_back(std::move(e));
+} // namespace
+
+std::string LoadAssJson(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return error_json("cannot open " + path);
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    if (!in.good() && !in.eof())
+        return error_json("cannot read " + path);
+    return to_json(parse_ass(ss.str()));
+}
+
+std::string NormalizeAssTime(const std::string& text) {
+    bool has_digit = false;
+    for (unsigned char c : text)
+        if (std::isdigit(c)) { has_digit = true; break; }
+    if (!has_digit)
+        return text;
+    return agi::Time(text).GetAssFormatted();
+}
+
+std::string NewAssJson() {
+    return to_json(make_default_doc(true));
+}
+
+std::string NormalizeSrtTime(const std::string& text) {
+    bool has_digit = false;
+    for (unsigned char c : text)
+        if (std::isdigit(c)) { has_digit = true; break; }
+    if (!has_digit)
+        return text;
+    return agi::Time(text).GetSrtFormatted();
+}
+
+std::string LoadSrtJson(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return error_json("cannot open " + path);
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    if (!in.good() && !in.eof())
+        return error_json("cannot read " + path);
+
+    std::string content = ss.str();
+    if (content.size() >= 3 &&
+        static_cast<unsigned char>(content[0]) == 0xEF &&
+        static_cast<unsigned char>(content[1]) == 0xBB &&
+        static_cast<unsigned char>(content[2]) == 0xBF) {
+        content.erase(0, 3);
+    }
+    std::string eol;
+    auto lines = split_lines(content, eol);
+    Doc d = make_default_doc(false);
+
+    size_t i = 0;
+    while (i < lines.size()) {
+        while (i < lines.size() && trim(lines[i]).empty())
+            ++i;
+        if (i >= lines.size())
+            break;
+        // optional cue number
+        bool all_digits = !trim(lines[i]).empty();
+        for (unsigned char c : trim(lines[i]))
+            if (!std::isdigit(c)) { all_digits = false; break; }
+        if (all_digits)
+            ++i;
+        if (i >= lines.size())
+            break;
+        std::string time_line = trim(lines[i]);
+        size_t arrow = time_line.find("-->");
+        if (arrow == std::string::npos) {
+            // Not a cue header; skip this line to avoid an infinite loop.
+            ++i;
+            continue;
+        }
+        std::string start = trim(time_line.substr(0, arrow));
+        std::string end = trim(time_line.substr(arrow + 3));
+        size_t space = end.find_first_of(" \t");
+        if (space != std::string::npos)
+            end = trim(end.substr(0, space));
+        ++i;
+
+        std::string text;
+        while (i < lines.size() && !trim(lines[i]).empty()) {
+            if (!text.empty())
+                text += "\\N";
+            text += lines[i];
+            ++i;
+        }
+
+        Event e;
+        e.kind = "Dialogue";
+        e.fields = {
+            "0",
+            agi::Time(start).GetAssFormatted(),
+            agi::Time(end).GetAssFormatted(),
+            "Default", "", "0", "0", "0", "",
+            text
+        };
+        e.start_ms = static_cast<int>(agi::Time(start));
+        e.end_ms = static_cast<int>(agi::Time(end));
+        d.events.push_back(std::move(e));
+    }
     return to_json(d);
 }

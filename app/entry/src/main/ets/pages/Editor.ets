@@ -368,7 +368,7 @@ struct Editor {
     try {
       const opt = new picker.DocumentSelectOptions();
       opt.maxSelectNumber = 1;
-      opt.fileSuffixFilters = ['.ass', '.ssa'];
+      opt.fileSuffixFilters = ['.ass', '.ssa', '.srt'];
       const doc = new picker.DocumentViewPicker(this.ctx);
       const uris = await doc.select(opt);
       if (!uris || uris.length === 0) {
@@ -380,6 +380,7 @@ struct Editor {
       } catch (e) {
         // keep raw
       }
+      const isSrt = name.toLowerCase().endsWith('.srt');
       const dir = `${this.ctx.filesDir}/ass`;
       try {
         fs.mkdirSync(dir, true);
@@ -388,15 +389,18 @@ struct Editor {
       }
       const dest = `${dir}/current-${stamp()}.ass`;
       this.copyTo(uris[0], dest);
-      const d: AssDoc = JSON.parse(aegisub.loadAss(dest)) as AssDoc;
+      const raw: string = isSrt ? aegisub.loadSrt(dest) : aegisub.loadAss(dest);
+      const d: AssDoc = JSON.parse(raw) as AssDoc;
       if (!d.ok) {
         this.status = `解析失败：${d.error ?? 'unknown'}`;
         return;
       }
       this.assPath = dest;
-      this.fileName = name;
+      this.fileName = isSrt ? `${name.substring(0, name.length - 4)}.ass` : name;
       this.applyDoc(d);
-      this.status = `已打开 ${name}，共 ${this.events.length} 行`;
+      this.status = isSrt
+        ? `已导入 SRT ${name}，共 ${this.events.length} 行（转成 ASS）`
+        : `已打开 ${name}，共 ${this.events.length} 行`;
     } catch (e) {
       this.status = `打开失败：${JSON.stringify(e)}`;
       hilog.error(0xFF01, TAG, 'openAss failed: %{public}s', `${e}`);
@@ -442,6 +446,56 @@ struct Editor {
       promptAction.showToast({ message: '字幕已导出', duration: 2000 });
     } catch (e) {
       this.status = `导出失败：${JSON.stringify(e)}`;
+    }
+  }
+
+  async exportSrt(): Promise<void> {
+    if (!this.hasDoc) {
+      return;
+    }
+    if (!this.saveToSandbox()) {
+      return;
+    }
+    try {
+      let out = '';
+      let index = 1;
+      for (let i = 0; i < this.events.length; i++) {
+        const e = this.events[i];
+        if (e.kind.toLowerCase() !== 'dialogue') {
+          continue;
+        }
+        const start = this.startIndex >= 0 ? (e.fields[this.startIndex] ?? '') : '';
+        const end = this.endIndex >= 0 ? (e.fields[this.endIndex] ?? '') : '';
+        let text = this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '';
+        text = text.split('\\N').join('\n');
+        text = text.split('\\n').join('\n');
+        out += `${index}\n${aegisub.srtTime(start)} --> ${aegisub.srtTime(end)}\n${text}\n\n`;
+        index++;
+      }
+      if (index === 1) {
+        this.status = '没有 Dialogue 行可导出';
+        return;
+      }
+      const path = `${this.ctx.filesDir}/ass/export-${stamp()}.srt`;
+      this.writeText(path, out);
+      let base = this.fileName;
+      const dot = base.lastIndexOf('.');
+      if (dot > 0) {
+        base = base.substring(0, dot);
+      }
+      const opt = new picker.DocumentSaveOptions();
+      opt.newFileNames = [`${base}.srt`];
+      opt.fileSuffixChoices = ['.srt'];
+      const doc = new picker.DocumentViewPicker(this.ctx);
+      const uris = await doc.save(opt);
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      this.writeToUri(path, uris[0]);
+      this.status = `已导出 SRT：${uris[0]}`;
+      promptAction.showToast({ message: 'SRT 已导出', duration: 2000 });
+    } catch (e) {
+      this.status = `SRT 导出失败：${JSON.stringify(e)}`;
     }
   }
 
@@ -499,8 +553,10 @@ struct Editor {
         Button('新建').layoutWeight(1).onClick(() => { this.newAss(); })
         Button('保存').layoutWeight(1).enabled(this.hasDoc)
           .onClick(() => { this.saveToSandbox(); })
-        Button('导出').layoutWeight(1).enabled(this.hasDoc)
+        Button('ASS').layoutWeight(1).enabled(this.hasDoc)
           .onClick(() => { this.exportAss(); })
+        Button('SRT').layoutWeight(1).enabled(this.hasDoc)
+          .onClick(() => { this.exportSrt(); })
       }
       .width('100%')
 
