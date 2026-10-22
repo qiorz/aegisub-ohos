@@ -91,6 +91,14 @@ struct Editor {
   @State editEnd: string = '';
   @State editStyle: string = '';
   @State editText: string = '';
+  @State editKind: string = 'Dialogue';
+  @State editLayer: string = '0';
+  @State editActor: string = '';
+  @State editMarginL: string = '0';
+  @State editMarginR: string = '0';
+  @State editMarginV: string = '0';
+  @State editEffect: string = '';
+  @State showAdvanced: boolean = false;
   @State showStyles: boolean = false;
   @State styleSection: string = '';
   @State stylePrefix: string = '';
@@ -224,6 +232,11 @@ struct Editor {
     this.canUndo = true;
     this.canRedo = this.redoStack.length > 0;
     this.dirty = true;
+  }
+
+  private fieldIndex(name: string): number {
+    const target = name.toLowerCase();
+    return this.format.findIndex((v: string) => v.toLowerCase() === target);
   }
 
   private styleField(name: string): number {
@@ -500,6 +513,22 @@ struct Editor {
     }
   }
 
+  private selectActiveEvent(): void {
+    for (let i = 0; i < this.events.length; i++) {
+      const e = this.events[i];
+      if (e.kind.toLowerCase() === 'dialogue' &&
+          this.currentMs >= e.startMs && this.currentMs < e.endMs) {
+        this.selected = i;
+        this.loadSelected();
+        this.showVideo = false;
+        this.showStyles = false;
+        this.status = `已选中当前播放行 #${i + 1}`;
+        return;
+      }
+    }
+    this.status = '当前播放位置没有 Dialogue 行';
+  }
+
   private seekSelected(): void {
     if (this.selected < 0 || this.selected >= this.events.length || this.videoUri === '') {
       return;
@@ -570,11 +599,24 @@ struct Editor {
       return;
     }
     const e: AssEvent = this.events[this.selected];
+    this.editKind = e.kind;
     this.editStart = this.startIndex >= 0 ? (e.fields[this.startIndex] ?? '') : '';
     this.editEnd = this.endIndex >= 0 ? (e.fields[this.endIndex] ?? '') : '';
     const si = this.styleIndex();
     this.editStyle = si >= 0 ? (e.fields[si] ?? '') : '';
     this.editText = this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '';
+    const li = this.fieldIndex('Layer');
+    this.editLayer = li >= 0 ? (e.fields[li] ?? '') : '0';
+    const ai = this.fieldIndex('Name');
+    this.editActor = ai >= 0 ? (e.fields[ai] ?? '') : '';
+    const ml = this.fieldIndex('MarginL');
+    this.editMarginL = ml >= 0 ? (e.fields[ml] ?? '') : '0';
+    const mr = this.fieldIndex('MarginR');
+    this.editMarginR = mr >= 0 ? (e.fields[mr] ?? '') : '0';
+    const mv = this.fieldIndex('MarginV');
+    this.editMarginV = mv >= 0 ? (e.fields[mv] ?? '') : '0';
+    const ef = this.fieldIndex('Effect');
+    this.editEffect = ef >= 0 ? (e.fields[ef] ?? '') : '';
   }
 
   private selectEvent(i: number): void {
@@ -615,7 +657,32 @@ struct Editor {
       this.editText = this.sanitizeText(this.editText);
       f[this.textIndex] = this.editText;
     }
-    let changed = false;
+    const li = this.fieldIndex('Layer');
+    if (li >= 0 && li < f.length) {
+      f[li] = this.editLayer.trim();
+    }
+    const ai = this.fieldIndex('Name');
+    if (ai >= 0 && ai < f.length) {
+      f[ai] = this.editActor;
+    }
+    const ml = this.fieldIndex('MarginL');
+    if (ml >= 0 && ml < f.length) {
+      f[ml] = this.editMarginL.trim();
+    }
+    const mr = this.fieldIndex('MarginR');
+    if (mr >= 0 && mr < f.length) {
+      f[mr] = this.editMarginR.trim();
+    }
+    const mv = this.fieldIndex('MarginV');
+    if (mv >= 0 && mv < f.length) {
+      f[mv] = this.editMarginV.trim();
+    }
+    const ef = this.fieldIndex('Effect');
+    if (ef >= 0 && ef < f.length) {
+      f[ef] = this.editEffect;
+    }
+    const newKind = this.editKind === 'Comment' ? 'Comment' : 'Dialogue';
+    let changed = newKind !== e.kind;
     for (let i = 0; i < f.length; i++) {
       if (f[i] !== e.fields[i]) {
         changed = true;
@@ -628,7 +695,7 @@ struct Editor {
     }
     this.pushUndo();
     const updated: AssEvent = {
-      kind: e.kind,
+      kind: newKind,
       fields: f,
       startMs: this.startIndex >= 0 && this.startIndex < f.length
         ? aegisub.timeToMs(f[this.startIndex]) : e.startMs,
@@ -638,6 +705,7 @@ struct Editor {
     const arr: AssEvent[] = this.events.slice();
     arr[this.selected] = updated;
     this.events = arr;
+    this.editKind = newKind;
     this.status = '已应用到内存；点“保存”写入文件';
   }
 
@@ -1154,6 +1222,10 @@ struct Editor {
           }
           .width('100%')
 
+          Button('选中当前播放行').fontSize(10)
+            .enabled(this.hasDoc)
+            .onClick(() => { this.selectActiveEvent(); })
+
           Text(this.videoStatus).fontSize(10).fontColor('#888888').width('100%')
           if (this.renderStatus !== '') {
             Text(this.renderStatus).fontSize(10).fontColor('#888888').width('100%')
@@ -1292,11 +1364,53 @@ struct Editor {
           }
           .width('100%')
 
+          Row({ space: 4 }) {
+            Button(this.editKind).layoutWeight(1).fontSize(10)
+              .onClick(() => {
+                this.editKind = this.editKind === 'Comment' ? 'Dialogue' : 'Comment';
+              })
+            Button(this.showAdvanced ? '收起字段' : '更多字段').layoutWeight(1).fontSize(10)
+              .onClick(() => { this.showAdvanced = !this.showAdvanced; })
+          }
+          .width('100%')
+
           TextArea({ text: this.editText })
             .height(64)
             .fontSize(12)
             .width('100%')
             .onChange((v: string) => { this.editText = v; })
+
+          if (this.showAdvanced) {
+            Row({ space: 4 }) {
+              Text('层').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editLayer }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editLayer = v; })
+              Text('角色').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editActor }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editActor = v; })
+            }
+            .width('100%')
+
+            Row({ space: 4 }) {
+              Text('左').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editMarginL }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editMarginL = v; })
+              Text('右').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editMarginR }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editMarginR = v; })
+              Text('垂').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editMarginV }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editMarginV = v; })
+            }
+            .width('100%')
+
+            Row({ space: 4 }) {
+              Text('特效').fontSize(10).fontColor('#666666')
+              TextInput({ text: this.editEffect }).layoutWeight(1).fontSize(10)
+                .onChange((v: string) => { this.editEffect = v; })
+            }
+            .width('100%')
+          }
 
           Row({ space: 4 }) {
             Button('-100ms').layoutWeight(1).fontSize(10)
