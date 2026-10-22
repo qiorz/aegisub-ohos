@@ -1,0 +1,15 @@
+# 上游源码（另行 checkout，不入库）
+/src/
+# 出树构建与产物
+/build/
+/out/
+/logs/
+*.hap
+*.har
+*.so
+*.a
+*.o
+# 编辑器/系统
+.DS_Store
+*.swp
+__pycache__/
