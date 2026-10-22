@@ -1362,6 +1362,12 @@ struct Editor {
     }
   }
 
+  onPageHide(): void {
+    if (this.hasDoc && this.dirty) {
+      this.saveToSandbox();
+    }
+  }
+
   aboutToDisappear(): void {
     if (this.audioPlayer !== undefined) {
       const player = this.audioPlayer;
