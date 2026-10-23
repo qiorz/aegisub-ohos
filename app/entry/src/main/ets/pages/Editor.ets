@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.12';
+const APP_VERSION = '0.2.13';
 
 interface AssEvent {
   kind: string;
@@ -1175,8 +1175,7 @@ struct Editor {
       this.audioName = name;
       this.audioStatus = '已加载；Slider / ±1s / ±100ms 定位';
       this.currentMs = 0;
-      this.audioDuration = 0;
-      this.addLog(`pickAudio ${name}, waveform ${this.waveformPeaks.length} buckets`);
+      this.addLog(`pickAudio ${name}, duration ${this.audioDuration}ms, waveform ${this.waveformPeaks.length} buckets`);
     } catch (e) {
       this.audioStatus = `选择音频失败：${JSON.stringify(e)}`;
       this.addLog(`pickAudio failed: ${JSON.stringify(e)}`);
