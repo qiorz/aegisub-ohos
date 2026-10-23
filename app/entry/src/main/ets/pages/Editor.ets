@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.5';
+const APP_VERSION = '0.2.6';
 
 interface AssEvent {
   kind: string;
@@ -196,6 +196,7 @@ struct Editor {
   private videoController: VideoController = new VideoController();
   private pendingSeekMs: number = -1;
   private audioPlayer: media.AVPlayer | undefined = undefined;
+  private audioFd: number = -1;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -324,9 +325,13 @@ struct Editor {
     if (this.audioPlayer !== undefined) {
       const player = this.audioPlayer;
       this.audioPlayer = undefined;
-      player.release().catch(() => {
-        // already released
+      player.release().then(() => {
+        this.closeAudioFd();
+      }).catch(() => {
+        this.closeAudioFd();
       });
+    } else {
+      this.closeAudioFd();
     }
     this.audioPath = '';
     this.audioName = '';
@@ -1010,6 +1015,30 @@ struct Editor {
     }
   }
 
+  private closeAudioFd(): void {
+    if (this.audioFd >= 0) {
+      try {
+        fs.closeSync(this.audioFd);
+      } catch (e) {
+        // already closed
+      }
+      this.audioFd = -1;
+    }
+  }
+
+  private async releaseAudioPlayer(): Promise<void> {
+    const player = this.audioPlayer;
+    this.audioPlayer = undefined;
+    if (player !== undefined) {
+      try {
+        await player.release();
+      } catch (e) {
+        // already released
+      }
+    }
+    this.closeAudioFd();
+  }
+
   private parseWaveform(path: string, name: string): void {
     this.waveformPeaks = [];
     this.waveformStatus = '';
@@ -1070,14 +1099,7 @@ struct Editor {
       const dot = name.lastIndexOf('.');
       const ext = dot > 0 ? name.substring(dot) : '.mp3';
       const dest = `${dir}/audio-${stamp()}${ext}`;
-      if (this.audioPlayer !== undefined) {
-        try {
-          await this.audioPlayer.release();
-        } catch (e) {
-          // already released
-        }
-        this.audioPlayer = undefined;
-      }
+      await this.releaseAudioPlayer();
       this.audioPath = '';
       this.audioName = '';
       this.audioPlaying = false;
@@ -1085,9 +1107,16 @@ struct Editor {
       this.clearDir(dir, []);
       this.copyTo(uris[0], dest);
       this.parseWaveform(dest, name);
+      const afd = fs.openSync(dest, fs.OpenMode.READ_ONLY);
+      this.audioFd = afd.fd;
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
-      player.url = fileUri.getUriFromPath(dest);
+      const src: media.AVFileDescriptor = {
+        fd: afd.fd,
+        offset: 0,
+        length: fs.statSync(dest).size
+      };
+      player.fdSrc = src;
       player.on('timeUpdate', (time: number) => {
         this.currentMs = time;
         this.updateActiveText();
@@ -1114,6 +1143,11 @@ struct Editor {
     } catch (e) {
       this.audioStatus = `选择音频失败：${JSON.stringify(e)}`;
       this.addLog(`pickAudio failed: ${JSON.stringify(e)}`);
+      if (this.audioPlayer !== undefined) {
+        await this.releaseAudioPlayer();
+      } else {
+        this.closeAudioFd();
+      }
     }
   }
 
@@ -1840,8 +1874,10 @@ struct Editor {
     if (this.audioPlayer !== undefined) {
       const player = this.audioPlayer;
       this.audioPlayer = undefined;
-      player.release().catch(() => {
-        // already released
+      player.release().then(() => {
+        this.closeAudioFd();
+      }).catch(() => {
+        this.closeAudioFd();
       });
     }
   }
