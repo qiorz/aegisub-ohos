@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.19';
+const APP_VERSION = '0.2.20';
 
 interface AssEvent {
   kind: string;
@@ -43,6 +43,12 @@ interface VideoProbeResult {
   width?: number;
   height?: number;
   error?: string;
+}
+
+interface WaveformView {
+  start: number;
+  count: number;
+  bars: number;
 }
 
 interface VideoWaveformResult {
@@ -142,6 +148,7 @@ struct Editor {
   @State audioPlaying: boolean = false;
   @State waveformPeaks: number[] = [];
   @State waveformStatus: string = '';
+  @State waveformZoom: number = 1;
   @State waveformWidth: number = 0;
   @State showStyles: boolean = false;
   @State styleSection: string = '';
@@ -174,6 +181,7 @@ struct Editor {
   @State videoWaveformPeaks: number[] = [];
   @State videoWaveformWidth: number = 0;
   @State videoWaveformStatus: string = '';
+  @State videoWaveformZoom: number = 1;
   @State activeText: string = '';
   @State subtitleImage: image.PixelMap | undefined = undefined;
   @State renderStatus: string = '';
@@ -1071,9 +1079,10 @@ struct Editor {
       this.addLog(`videoFps ${this.videoFps.toFixed(3)} (${this.videoFpsSource})`);
       this.videoWaveformPeaks = [];
       this.videoWaveformWidth = 0;
+      this.videoWaveformZoom = 1;
       this.videoWaveformStatus = '解析视频音轨波形…';
       try {
-        const waveRaw: string = aegisub.videoWaveform(dest, 200);
+        const waveRaw: string = aegisub.videoWaveform(dest, 2000);
         const wave: VideoWaveformResult = JSON.parse(waveRaw) as VideoWaveformResult;
         if (wave.ok) {
           this.videoWaveformPeaks = wave.peaks ?? [];
@@ -1180,13 +1189,72 @@ struct Editor {
     this.closeAudioFd();
   }
 
+  private buildWaveformView(total: number, zoom: number,
+                            durationMs: number, currentMs: number): WaveformView {
+    const z = zoom > 0 ? zoom : 1;
+    let count = Math.floor(total / z);
+    count = Math.max(1, Math.min(total, count));
+    const ratio = durationMs > 0 ? Math.max(0, Math.min(1, currentMs / durationMs)) : 0;
+    const maxStart = Math.max(0, total - count);
+    let start = Math.floor(ratio * total - count / 2);
+    start = Math.max(0, Math.min(maxStart, start));
+    return { start: start, count: count, bars: Math.min(200, count) };
+  }
+
+  private waveformBars(peaks: number[], view: WaveformView): number[] {
+    if (peaks.length === 0 || view.bars <= 0) {
+      return [];
+    }
+    const out: number[] = [];
+    for (let i = 0; i < view.bars; i++) {
+      const a = Math.min(peaks.length - 1,
+        view.start + Math.floor(i * view.count / view.bars));
+      const b = Math.min(peaks.length,
+        view.start + Math.floor((i + 1) * view.count / view.bars));
+      let max = 0;
+      for (let j = a; j < Math.max(a + 1, b); j++) {
+        max = Math.max(max, peaks[j]);
+      }
+      out.push(max);
+    }
+    return out;
+  }
+
+  private waveformPlayheadX(view: WaveformView, total: number, durationMs: number,
+                             currentMs: number, width: number): number {
+    if (width <= 0 || total <= 0 || view.count <= 0) {
+      return 0;
+    }
+    const ratio = durationMs > 0 ? Math.max(0, Math.min(1, currentMs / durationMs)) : 0;
+    const x = (ratio * total - view.start) / view.count * width;
+    return Math.max(0, Math.min(width - 2, x));
+  }
+
+  private audioWaveformView(): WaveformView {
+    return this.buildWaveformView(this.waveformPeaks.length,
+      this.waveformZoom, this.audioDuration, this.currentMs);
+  }
+
+  private visibleAudioWaveform(): number[] {
+    return this.waveformBars(this.waveformPeaks, this.audioWaveformView());
+  }
+
+  private videoWaveformView(): WaveformView {
+    return this.buildWaveformView(this.videoWaveformPeaks.length,
+      this.videoWaveformZoom, this.videoDuration * 1000, this.currentMs);
+  }
+
+  private visibleVideoWaveform(): number[] {
+    return this.waveformBars(this.videoWaveformPeaks, this.videoWaveformView());
+  }
+
   private parseWaveform(path: string, name: string): void {
     this.waveformPeaks = [];
     this.waveformStatus = '';
     try {
       const raw: string = name.toLowerCase().endsWith('.wav')
-        ? aegisub.waveform(path, 200)
-        : aegisub.videoWaveform(path, 200);
+        ? aegisub.waveform(path, 2000)
+        : aegisub.videoWaveform(path, 2000);
       const result: WaveformResult = JSON.parse(raw) as WaveformResult;
       if (result.ok) {
         this.waveformPeaks = result.peaks ?? [];
@@ -2287,9 +2355,18 @@ struct Editor {
           }
 
           if (this.waveformPeaks.length > 0) {
+            Row({ space: 3 }) {
+              Text('缩放').fontSize(9).fontColor('#666666')
+              ForEach([1, 2, 4, 8], (z: number) => {
+                Button(`${z}x`).height(22).fontSize(9).padding(0).width(34)
+                  .backgroundColor(this.waveformZoom === z ? '#DCE6FF' : '#F0F0F0')
+                  .onClick(() => { this.waveformZoom = z; })
+              }, (z: number) => `${z}`)
+            }
+            .width('100%')
             Stack({ alignContent: Alignment.TopStart }) {
               Row({ space: 0 }) {
-                ForEach(this.waveformPeaks, (v: number, i: number) => {
+                ForEach(this.visibleAudioWaveform(), (v: number, i: number) => {
                   Column()
                     .layoutWeight(1)
                     .height(Math.max(1, v * 70))
@@ -2307,8 +2384,9 @@ struct Editor {
                   .height(70)
                   .backgroundColor('#E03131')
                   .position({
-                    x: Math.min(this.waveformWidth - 2,
-                      Math.max(0, this.currentMs / this.audioDuration * this.waveformWidth)),
+                    x: this.waveformPlayheadX(this.audioWaveformView(),
+                      this.waveformPeaks.length, this.audioDuration,
+                      this.currentMs, this.waveformWidth),
                     y: 0
                   })
               }
@@ -2535,10 +2613,18 @@ struct Editor {
           }
 
           if (this.videoWaveformPeaks.length > 0) {
-            Text('视频音轨波形').fontSize(9).fontColor('#888888').width('100%')
+            Row({ space: 3 }) {
+              Text('视频音轨').fontSize(9).fontColor('#888888')
+              ForEach([1, 2, 4, 8], (z: number) => {
+                Button(`${z}x`).height(20).fontSize(8).padding(0).width(30)
+                  .backgroundColor(this.videoWaveformZoom === z ? '#DCE6FF' : '#F0F0F0')
+                  .onClick(() => { this.videoWaveformZoom = z; })
+              }, (z: number) => `${z}`)
+            }
+            .width('100%')
             Stack({ alignContent: Alignment.TopStart }) {
               Row({ space: 0 }) {
-                ForEach(this.videoWaveformPeaks, (v: number, i: number) => {
+                ForEach(this.visibleVideoWaveform(), (v: number, i: number) => {
                   Column()
                     .layoutWeight(1)
                     .height(Math.max(1, v * 50))
@@ -2556,9 +2642,9 @@ struct Editor {
                   .height(50)
                   .backgroundColor('#E03131')
                   .position({
-                    x: Math.min(this.videoWaveformWidth - 2,
-                      Math.max(0, this.currentMs / 1000 / this.videoDuration *
-                        this.videoWaveformWidth)),
+                    x: this.waveformPlayheadX(this.videoWaveformView(),
+                      this.videoWaveformPeaks.length, this.videoDuration * 1000,
+                      this.currentMs, this.videoWaveformWidth),
                     y: 0
                   })
               }
