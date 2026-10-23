@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.16';
+const APP_VERSION = '0.2.19';
 
 interface AssEvent {
   kind: string;
@@ -203,6 +203,8 @@ struct Editor {
   private textController: TextAreaController = new TextAreaController();
   private selStart: number = 0;
   private selEnd: number = 0;
+  private suppressTextChange: boolean = false;
+  private editRow: number = -1;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -560,6 +562,32 @@ struct Editor {
           actor.toLowerCase().includes(q) ||
           style.toLowerCase().includes(q)) {
         out.push(e);
+      }
+    }
+    return out;
+  }
+
+  private filteredEventIndices(): number[] {
+    const q = this.filterText.trim().toLowerCase();
+    if (q === '') {
+      const all: number[] = [];
+      for (let i = 0; i < this.events.length; i++) {
+        all.push(i);
+      }
+      return all;
+    }
+    const out: number[] = [];
+    const ai = this.fieldIndex('Name');
+    const si = this.styleIndex();
+    for (let i = 0; i < this.events.length; i++) {
+      const e = this.events[i];
+      const text = this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '';
+      const actor = ai >= 0 ? (e.fields[ai] ?? '') : '';
+      const style = si >= 0 ? (e.fields[si] ?? '') : '';
+      if (text.toLowerCase().includes(q) ||
+          actor.toLowerCase().includes(q) ||
+          style.toLowerCase().includes(q)) {
+        out.push(i);
       }
     }
     return out;
@@ -1421,13 +1449,19 @@ struct Editor {
 
   private loadSelected(): void {
     if (this.selected < 0 || this.selected >= this.events.length) {
+      this.editRow = -1;
       this.editStart = '';
       this.editEnd = '';
       this.editStyle = '';
       this.editText = '';
+      this.selStart = 0;
+      this.selEnd = 0;
+      this.suppressTextChange = false;
       return;
     }
-    const e: AssEvent = this.events[this.selected];
+    this.editRow = this.selected;
+    const e: AssEvent = this.events[this.editRow];
+    this.suppressTextChange = true;
     this.selStart = 0;
     this.selEnd = 0;
     this.editKind = e.kind;
@@ -1448,18 +1482,38 @@ struct Editor {
     this.editMarginV = mv >= 0 ? (e.fields[mv] ?? '') : '0';
     const ef = this.fieldIndex('Effect');
     this.editEffect = ef >= 0 ? (e.fields[ef] ?? '') : '';
+    setTimeout(() => {
+      this.suppressTextChange = false;
+    }, 100);
   }
 
   private selectEvent(i: number): void {
-    if (this.selected >= 0 && this.selected !== i) {
+    if (this.selected >= 0 && this.selected !== i && this.editRow === this.selected) {
       this.applyEdit();
     }
     this.selected = i;
     this.loadSelected();
   }
 
+  private captureSelection(): void {
+    try {
+      const range: TextRange = this.textController.getSelection();
+      if (range.start !== undefined && range.end !== undefined &&
+          range.end > range.start) {
+        this.selStart = range.start;
+        this.selEnd = range.end;
+      }
+    } catch (e) {
+      // controller not bound
+    }
+  }
+
   /** ASS is line-oriented; a real newline in TextArea must become \N. */
   private applyLineTag(open: string, close: string): void {
+    this.captureSelection();
+    this.addLog(`tag ${open} sel=${this.selStart}-${this.selEnd} ` +
+      `len=${this.editText.length}`);
+    this.suppressTextChange = true;
     const text = this.editText;
     const start = Math.max(0, Math.min(this.selStart, text.length));
     const end = Math.max(start, Math.min(this.selEnd, text.length));
@@ -1480,7 +1534,8 @@ struct Editor {
         } catch (e) {
           // TextArea not focused
         }
-      }, 0);
+        this.suppressTextChange = false;
+      }, 100);
       this.status = '已给选中文本加标签；点“应用”写入';
       return;
     }
@@ -1492,9 +1547,13 @@ struct Editor {
       this.editText = open + text + close;
       this.status = '已插入行标签；点“应用”写入';
     }
+    setTimeout(() => {
+      this.suppressTextChange = false;
+    }, 100);
   }
 
   private clearLineTags(): void {
+    this.suppressTextChange = true;
     let out = '';
     let depth = 0;
     for (let i = 0; i < this.editText.length; i++) {
@@ -1508,6 +1567,11 @@ struct Editor {
       }
     }
     this.editText = out;
+    this.selStart = 0;
+    this.selEnd = 0;
+    setTimeout(() => {
+      this.suppressTextChange = false;
+    }, 100);
     this.status = '已清除行内标签';
   }
 
@@ -1519,10 +1583,14 @@ struct Editor {
   }
 
   private applyEdit(): void {
-    if (this.selected < 0 || this.selected >= this.events.length) {
+    const row = this.editRow >= 0 ? this.editRow : this.selected;
+    this.addLog(`applyEdit selected=${this.selected} editRow=${this.editRow} ` +
+      `total=${this.events.length} textLen=${this.editText.length}`);
+    if (row < 0 || row >= this.events.length) {
+      this.addLog('applyEdit rejected: invalid row');
       return;
     }
-    const e: AssEvent = this.events[this.selected];
+    const e: AssEvent = this.events[row];
     const f: string[] = e.fields.slice();
     if (this.startIndex >= 0 && this.startIndex < f.length) {
       this.editStart = aegisub.normalizeTime(this.editStart.trim());
@@ -1574,6 +1642,7 @@ struct Editor {
     }
     if (!changed) {
       this.status = '无改动';
+      this.addLog('applyEdit no change');
       return;
     }
     this.pushUndo();
@@ -1586,11 +1655,13 @@ struct Editor {
         ? aegisub.timeToMs(f[this.endIndex]) : e.endMs
     };
     const arr: AssEvent[] = this.events.slice();
-    arr[this.selected] = updated;
+    arr[row] = updated;
     this.events = arr;
+    this.editRow = row;
     this.editKind = newKind;
     this.selStart = 0;
     this.selEnd = 0;
+    this.addLog(`applyEdit ok row=${row} textLen=${this.editText.length}`);
     this.status = '已应用到内存；点“保存”写入文件';
   }
 
@@ -2644,31 +2715,31 @@ struct Editor {
         }
 
         List({ space: 3 }) {
-          ForEach(this.filteredEvents(), (e: AssEvent) => {
+          ForEach(this.filteredEventIndices(), (idx: number) => {
             ListItem() {
               Column({ space: 2 }) {
                 Row({ space: 5 }) {
-                  Text(`${this.events.indexOf(e) + 1}`).fontSize(9).fontColor('#999999').width(22)
-                  Text(this.startIndex >= 0 ? (e.fields[this.startIndex] ?? '') : '')
+                  Text(`${idx + 1}`).fontSize(9).fontColor('#999999').width(22)
+                  Text(this.startIndex >= 0 ? (this.events[idx].fields[this.startIndex] ?? '') : '')
                     .fontSize(9).fontColor('#4263EB')
                   Text('→').fontSize(9).fontColor('#999999')
-                  Text(this.endIndex >= 0 ? (e.fields[this.endIndex] ?? '') : '')
+                  Text(this.endIndex >= 0 ? (this.events[idx].fields[this.endIndex] ?? '') : '')
                     .fontSize(9).fontColor('#4263EB')
-                  Text(e.kind).fontSize(8).fontColor('#999999')
+                  Text(this.events[idx].kind).fontSize(8).fontColor('#999999')
                 }
-                Text(this.textIndex >= 0 ? (e.fields[this.textIndex] ?? '') : '')
+                Text(this.textIndex >= 0 ? (this.events[idx].fields[this.textIndex] ?? '') : '')
                   .fontSize(12)
                   .maxLines(2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
               }
               .width('100%')
               .padding(6)
-              .backgroundColor(this.selected === this.events.indexOf(e) ? '#E7F0FF' : '#FFFFFF')
+              .backgroundColor(this.selected === idx ? '#E7F0FF' : '#FFFFFF')
               .borderRadius(6)
               .alignItems(HorizontalAlign.Start)
             }
-            .onClick(() => { this.selectEvent(this.events.indexOf(e)); })
-          }, (e: AssEvent) => `${this.events.indexOf(e)}`)
+            .onClick(() => { this.selectEvent(idx); })
+          }, (idx: number) => `${idx}`)
         }
         .layoutWeight(1)
         .width('100%')
@@ -2719,10 +2790,20 @@ struct Editor {
             .height(64)
             .fontSize(12)
             .width('100%')
-            .onChange((v: string) => { this.editText = v; })
+            .onChange((v: string) => {
+              if (!this.suppressTextChange) {
+                this.editText = v;
+                this.selStart = 0;
+                this.selEnd = 0;
+              } else {
+                this.addLog(`onChange ignored len=${v.length}`);
+              }
+            })
             .onTextSelectionChange((start: number, end: number) => {
-              this.selStart = start;
-              this.selEnd = end;
+              if (!this.suppressTextChange && end > start) {
+                this.selStart = start;
+                this.selEnd = end;
+              }
             })
 
           Text('选中文本后加标签；未选中时作用于整行')
@@ -2752,6 +2833,11 @@ struct Editor {
               .onClick(() => { this.clearLineTags(); })
           }
           .width('100%')
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.captureSelection();
+            }
+          })
 
           if (this.showAdvanced) {
             Row({ space: 4 }) {
