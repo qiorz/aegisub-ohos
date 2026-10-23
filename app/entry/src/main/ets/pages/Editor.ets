@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.14';
+const APP_VERSION = '0.2.15';
 
 interface AssEvent {
   kind: string;
@@ -2478,7 +2478,7 @@ struct Editor {
         .layoutWeight(1)
         .width('100%')
         .alignItems(HorizontalAlign.Center)
-      } else if (this.hasDoc && this.showStyles) {      } else if (this.hasDoc && this.showStyles) {
+      } else if (this.hasDoc && this.showStyles) {
         Column({ space: 6 }) {
           Row({ space: 6 }) {
             Text('样式').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
