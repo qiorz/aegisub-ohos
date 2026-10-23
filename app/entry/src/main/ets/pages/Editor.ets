@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.7';
+const APP_VERSION = '0.2.8';
 
 interface AssEvent {
   kind: string;
@@ -1134,16 +1134,16 @@ struct Editor {
       this.clearDir(dir, []);
       this.copyTo(uris[0], dest);
       this.parseWaveform(dest, name);
-      const afd = fs.openSync(dest, fs.OpenMode.READ_ONLY);
-      this.audioFd = afd.fd;
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
+      this.audioFd = -1;
       player.on('timeUpdate', (time: number) => {
         this.currentMs = time;
         this.updateActiveText();
       });
       player.on('durationUpdate', (duration: number) => {
         this.audioDuration = duration;
+        this.addLog(`audio duration ${duration}`);
       });
       player.on('stateChange', (state: media.AVPlayerState) => {
         this.audioPlaying = state === 'playing';
@@ -1156,12 +1156,7 @@ struct Editor {
         this.addLog(`audio player error ${err.code}`);
       });
       const ready = this.waitForAudioInitialized(player);
-      const src: media.AVFileDescriptor = {
-        fd: afd.fd,
-        offset: 0,
-        length: fs.statSync(dest).size
-      };
-      player.fdSrc = src;
+      player.url = fileUri.getUriFromPath(dest);
       await ready;
       await player.prepare();
       this.audioPath = dest;
@@ -1185,14 +1180,18 @@ struct Editor {
     if (this.audioPlayer === undefined) {
       return;
     }
+    this.addLog(`audio toggle playing=${this.audioPlaying}`);
     try {
       if (this.audioPlaying) {
         await this.audioPlayer.pause();
+        this.addLog('audio pause ok');
       } else {
         await this.audioPlayer.play();
+        this.addLog('audio play ok');
       }
     } catch (e) {
       this.audioStatus = `播放失败：${JSON.stringify(e)}`;
+      this.addLog(`audio play/pause failed: ${JSON.stringify(e)}`);
     }
   }
 
