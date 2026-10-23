@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.4';
+const APP_VERSION = '0.2.5';
 
 interface AssEvent {
   kind: string;
@@ -1013,16 +1013,14 @@ struct Editor {
   private parseWaveform(path: string, name: string): void {
     this.waveformPeaks = [];
     this.waveformStatus = '';
-    if (!name.toLowerCase().endsWith('.wav')) {
-      this.waveformStatus = '波形仅支持 WAV；MP3/AAC/FLAC/OGG 仍可播放/打轴';
-      return;
-    }
     try {
-      const raw: string = aegisub.waveform(path, 200);
+      const raw: string = name.toLowerCase().endsWith('.wav')
+        ? aegisub.waveform(path, 200)
+        : aegisub.videoWaveform(path, 200);
       const result: WaveformResult = JSON.parse(raw) as WaveformResult;
       if (result.ok) {
         this.waveformPeaks = result.peaks ?? [];
-        this.waveformStatus = `WAV 波形 ${this.waveformPeaks.length} 段`;
+        this.waveformStatus = `音频波形 ${this.waveformPeaks.length} 段`;
       } else {
         this.waveformStatus = `波形解析失败：${result.error ?? 'unknown'}`;
       }
@@ -2020,8 +2018,6 @@ struct Editor {
           Row({ space: 6 }) {
             Button('选择音频').fontSize(11)
               .onClick(() => { this.pickAudio(); })
-            Button('WAV 波形').fontSize(10)
-              .onClick(() => { this.pickAudioWav(); })
             Text(this.audioName === '' ? '未选择音频' : this.audioName)
               .fontSize(10).fontColor('#666666').layoutWeight(1)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -2029,10 +2025,9 @@ struct Editor {
           .width('100%')
 
           Text(this.audioStatus).fontSize(10).fontColor('#888888').width('100%')
-          Text('WAV 显示柱状波形；MP3/AAC/FLAC/OGG 只播放不打波形')
+          Text('波形自动解析：WAV / MP3 / M4A / AAC / FLAC / OGG')
             .fontSize(9).fontColor('#999999').width('100%')
-          if (this.audioPath !== '' && this.audioName.toLowerCase().endsWith('.wav') &&
-              this.waveformPeaks.length === 0) {
+          if (this.audioPath !== '' && this.waveformPeaks.length === 0) {
             Button('重载波形').fontSize(10)
               .onClick(() => { this.reloadWaveform(); })
           }

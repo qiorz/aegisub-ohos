@@ -41,6 +41,17 @@ assert max(d['peaks']) > 0.1, max(d['peaks'])
 print('PASS: video audio waveform, max peak', max(d['peaks']))
 PY
 
+echo "=== MP3 audio ==="
+qemu-aarch64-static "$OUT" /root/opt/dsh/workspace/hb-build/deps/lame-3.100/testcase.mp3 100 > "$DATA/mp3.json"
+python3 - "$DATA/mp3.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+assert d['ok'] is True, d
+assert len(d['peaks']) == 100
+assert max(d['peaks']) > 0.1, max(d['peaks'])
+print('PASS: MP3 audio waveform, max peak', max(d['peaks']))
+PY
+
 echo "=== noaudio MKV ==="
 qemu-aarch64-static "$OUT" /root/opt/dsh/workspace/hb-build/cli/noaudio.mkv 100 > "$DATA/noaudio.json"
 python3 - "$DATA/noaudio.json" <<'PY'
