@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.21';
+const APP_VERSION = '0.2.22';
 
 interface AssEvent {
   kind: string;
@@ -131,6 +131,20 @@ struct Editor {
   @State showAdvanced: boolean = false;
   @State filterText: string = '';
   @State showAudio: boolean = false;
+  @State showEffects: boolean = false;
+  @State fxX: string = '';
+  @State fxY: string = '';
+  @State fxX1: string = '';
+  @State fxY1: string = '';
+  @State fxX2: string = '';
+  @State fxY2: string = '';
+  @State fxT1: string = '';
+  @State fxT2: string = '';
+  @State fxFadeIn: string = '';
+  @State fxFadeOut: string = '';
+  @State fxAngle: string = '';
+  @State fxScale: string = '';
+  @State fxBlur: string = '';
   @State showCache: boolean = false;
   @State cacheTotal: number = 0;
   @State cacheVideo: number = 0;
@@ -310,6 +324,7 @@ struct Editor {
 
   private openCache(): void {
     this.showCache = true;
+    this.showEffects = false;
     this.showStyles = false;
     this.showVideo = false;
     this.showAudio = false;
@@ -863,6 +878,7 @@ struct Editor {
   private toggleVideo(): void {
     this.showVideo = !this.showVideo;
     if (this.showVideo) {
+      this.showEffects = false;
       this.showStyles = false;
       this.showAudio = false;
       this.showCache = false;
@@ -1119,6 +1135,7 @@ struct Editor {
   private toggleAudio(): void {
     this.showAudio = !this.showAudio;
     if (this.showAudio) {
+      this.showEffects = false;
       this.showStyles = false;
       this.showVideo = false;
       this.showCache = false;
@@ -1439,6 +1456,7 @@ struct Editor {
       return;
     }
     this.showVideo = true;
+    this.showEffects = false;
     this.showStyles = false;
     this.showAudio = false;
     if (this.selected >= 0 && this.selected < this.events.length) {
@@ -1513,6 +1531,9 @@ struct Editor {
     this.filterText = '';
     this.showAudio = false;
     this.showCache = false;
+    this.showEffects = false;
+    this.showStyles = false;
+    this.showVideo = false;
   }
 
   private loadSelected(): void {
@@ -1561,6 +1582,28 @@ struct Editor {
     }
     this.selected = i;
     this.loadSelected();
+  }
+
+  private fxNum(value: string, fallback: number): number {
+    const n = Number(value.trim());
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private insertEffect(tag: string): void {
+    if (this.selected < 0 || this.selected >= this.events.length) {
+      this.status = '请先选择一行字幕';
+      return;
+    }
+    const block = `{${tag}}`;
+    if (this.editText.startsWith(block)) {
+      this.status = '该特效已在行首';
+      this.showEffects = false;
+      return;
+    }
+    this.editText = block + this.editText;
+    this.addLog(`effect ${tag}`);
+    this.status = `已插入 ${block}；回台词页点“应用”`;
+    this.showEffects = false;
   }
 
   private captureSelection(): void {
@@ -2194,6 +2237,7 @@ struct Editor {
           .enabled(this.hasDoc)
           .onClick(() => {
             this.showVideo = true;
+            this.showEffects = false;
             this.showStyles = false;
             this.showAudio = false;
             this.pickVideo();
@@ -2202,6 +2246,7 @@ struct Editor {
           .enabled(this.hasDoc)
           .onClick(() => {
             this.showAudio = true;
+            this.showEffects = false;
             this.showStyles = false;
             this.showVideo = false;
             this.pickAudio();
@@ -2209,18 +2254,20 @@ struct Editor {
       }
       .width('100%')
 
-      Row({ space: 6 }) {
+      Row({ space: 4 }) {
         Button('台词')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
-          .backgroundColor(!this.showStyles && !this.showVideo && !this.showAudio ? '#DCE6FF' : '#F0F0F0')
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
+          .backgroundColor(!this.showStyles && !this.showVideo && !this.showAudio &&
+            !this.showCache && !this.showEffects ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => {
             this.showStyles = false;
             this.showVideo = false;
             this.showAudio = false;
             this.showCache = false;
+            this.showEffects = false;
           })
         Button('样式')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showStyles ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => {
@@ -2228,25 +2275,37 @@ struct Editor {
             this.showVideo = false;
             this.showAudio = false;
             this.showCache = false;
+            this.showEffects = false;
             if (this.styleEntries.length > 0 && this.styleSelected < 0) {
               this.selectStyle(0);
             }
           })
         Button('视频')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showVideo ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleVideo(); })
         Button('音频')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
           .enabled(this.hasDoc)
           .backgroundColor(this.showAudio ? '#DCE6FF' : '#F0F0F0')
           .onClick(() => { this.toggleAudio(); })
+        Button('特效')
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
+          .enabled(this.hasDoc)
+          .backgroundColor(this.showEffects ? '#DCE6FF' : '#F0F0F0')
+          .onClick(() => {
+            this.showEffects = true;
+            this.showStyles = false;
+            this.showVideo = false;
+            this.showAudio = false;
+            this.showCache = false;
+          })
         Button('日志')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
           .onClick(() => { this.exportLog(); })
         Button('缓存')
-          .layoutWeight(1).height(28).fontSize(10).padding(0)
+          .layoutWeight(1).height(28).fontSize(9).padding(0)
           .onClick(() => { this.openCache(); })
       }
       .width('100%')
@@ -2332,6 +2391,110 @@ struct Editor {
           Text('当前打开的字幕不会被删除；字体清理后下次渲染会自动重新解压。')
             .fontSize(9).fontColor('#999999').width('100%')
           Text(this.cacheStatus).fontSize(10).fontColor('#888888').width('100%')
+        }
+        .layoutWeight(1)
+        .width('100%')
+      } else if (this.hasDoc && this.showEffects) {
+        Column({ space: 7 }) {
+          Row({ space: 6 }) {
+            Text('特效标签').fontSize(16).fontWeight(FontWeight.Bold).layoutWeight(1)
+            Text('插入到当前行开头').fontSize(9).fontColor('#888888')
+          }
+          .width('100%')
+          Text('单位：像素 / 毫秒 / 度 / %；插入后回“台词”点应用')
+            .fontSize(9).fontColor('#999999').width('100%')
+
+          Row({ space: 4 }) {
+            Text('位置').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxX, placeholder: 'X' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxX = v; })
+            TextInput({ text: this.fxY, placeholder: 'Y' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxY = v; })
+            Button('\\pos').fontSize(10).height(26)
+              .onClick(() => {
+                this.insertEffect(`\\pos(${this.fxNum(this.fxX, 0)},${this.fxNum(this.fxY, 0)})`);
+              })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('移动').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxX1, placeholder: 'X1' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxX1 = v; })
+            TextInput({ text: this.fxY1, placeholder: 'Y1' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxY1 = v; })
+            TextInput({ text: this.fxX2, placeholder: 'X2' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxX2 = v; })
+            TextInput({ text: this.fxY2, placeholder: 'Y2' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxY2 = v; })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('时间').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxT1, placeholder: 'T1(ms)' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxT1 = v; })
+            TextInput({ text: this.fxT2, placeholder: 'T2(ms)' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxT2 = v; })
+            Button('\\move').fontSize(10).height(26)
+              .onClick(() => {
+                this.insertEffect(`\\move(${this.fxNum(this.fxX1, 0)},${this.fxNum(this.fxY1, 0)},` +
+                  `${this.fxNum(this.fxX2, 0)},${this.fxNum(this.fxY2, 0)},` +
+                  `${this.fxNum(this.fxT1, 0)},${this.fxNum(this.fxT2, 2000)})`);
+              })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('淡入淡出').fontSize(10).width(55).fontColor('#666666')
+            TextInput({ text: this.fxFadeIn, placeholder: '入(ms)' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxFadeIn = v; })
+            TextInput({ text: this.fxFadeOut, placeholder: '出(ms)' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxFadeOut = v; })
+            Button('\\fad').fontSize(10).height(26)
+              .onClick(() => {
+                this.insertEffect(`\\fad(${this.fxNum(this.fxFadeIn, 200)},` +
+                  `${this.fxNum(this.fxFadeOut, 200)})`);
+              })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('旋转').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxAngle, placeholder: '角度' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxAngle = v; })
+            Button('\\frz').fontSize(10).height(26)
+              .onClick(() => {
+                this.insertEffect(`\\frz(${this.fxNum(this.fxAngle, 0)})`);
+              })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('缩放').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxScale, placeholder: '%' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxScale = v; })
+            Button('\\fsc').fontSize(10).height(26)
+              .onClick(() => {
+                const s = this.fxNum(this.fxScale, 100);
+                this.insertEffect(`\\fscx(${s})\\fscy(${s})`);
+              })
+          }
+          .width('100%')
+
+          Row({ space: 4 }) {
+            Text('模糊').fontSize(10).width(30).fontColor('#666666')
+            TextInput({ text: this.fxBlur, placeholder: '半径' }).layoutWeight(1).fontSize(10)
+              .onChange((v: string) => { this.fxBlur = v; })
+            Button('\\blur').fontSize(10).height(26)
+              .onClick(() => {
+                this.insertEffect(`\\blur(${this.fxNum(this.fxBlur, 2)})`);
+              })
+          }
+          .width('100%')
+
+          Text('提示：特效插入为独立覆盖块，例如 {\\pos(320,180)}。')
+            .fontSize(9).fontColor('#999999').width('100%')
         }
         .layoutWeight(1)
         .width('100%')
