@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.20';
+const APP_VERSION = '0.2.21';
 
 interface AssEvent {
   kind: string;
@@ -2360,7 +2360,10 @@ struct Editor {
               ForEach([1, 2, 4, 8], (z: number) => {
                 Button(`${z}x`).height(22).fontSize(9).padding(0).width(34)
                   .backgroundColor(this.waveformZoom === z ? '#DCE6FF' : '#F0F0F0')
-                  .onClick(() => { this.waveformZoom = z; })
+                  .onClick(() => {
+                    this.waveformZoom = z;
+                    this.addLog(`waveform zoom ${z}x`);
+                  })
               }, (z: number) => `${z}`)
             }
             .width('100%')
@@ -2371,7 +2374,8 @@ struct Editor {
                     .layoutWeight(1)
                     .height(Math.max(1, v * 70))
                     .backgroundColor('#4263EB')
-                }, (v: number, i: number) => `${i}`)
+                }, (v: number, i: number) =>
+                  `${this.waveformZoom}-${i}-${v.toFixed(3)}`)
               }
               .width('100%')
               .height(70)
@@ -2618,7 +2622,10 @@ struct Editor {
               ForEach([1, 2, 4, 8], (z: number) => {
                 Button(`${z}x`).height(20).fontSize(8).padding(0).width(30)
                   .backgroundColor(this.videoWaveformZoom === z ? '#DCE6FF' : '#F0F0F0')
-                  .onClick(() => { this.videoWaveformZoom = z; })
+                  .onClick(() => {
+                    this.videoWaveformZoom = z;
+                    this.addLog(`video waveform zoom ${z}x`);
+                  })
               }, (z: number) => `${z}`)
             }
             .width('100%')
@@ -2629,7 +2636,8 @@ struct Editor {
                     .layoutWeight(1)
                     .height(Math.max(1, v * 50))
                     .backgroundColor('#2F9E44')
-                }, (v: number, i: number) => `${i}`)
+                }, (v: number, i: number) =>
+                  `${this.videoWaveformZoom}-${i}-${v.toFixed(3)}`)
               }
               .width('100%')
               .height(50)
