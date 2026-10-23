@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.9';
+const APP_VERSION = '0.2.10';
 
 interface AssEvent {
   kind: string;
@@ -1025,6 +1025,10 @@ struct Editor {
         }
       }, 5000);
       player.on('stateChange', (state: media.AVPlayerState) => {
+        this.audioPlaying = state === 'playing';
+        if (state === 'completed') {
+          this.audioPlaying = false;
+        }
         this.addLog(`audio state ${state}`);
         if (done) {
           return;
@@ -1145,12 +1149,6 @@ struct Editor {
       player.on('durationUpdate', (duration: number) => {
         this.audioDuration = duration;
         this.addLog(`audio duration ${duration}`);
-      });
-      player.on('stateChange', (state: media.AVPlayerState) => {
-        this.audioPlaying = state === 'playing';
-        if (state === 'completed') {
-          this.audioPlaying = false;
-        }
       });
       player.on('error', (err: BusinessError) => {
         this.audioStatus = `音频错误 ${err.code}`;
