@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.2';
 
 interface AssEvent {
   kind: string;
@@ -135,6 +135,7 @@ struct Editor {
   @State audioPlaying: boolean = false;
   @State waveformPeaks: number[] = [];
   @State waveformStatus: string = '';
+  @State waveformWidth: number = 0;
   @State showStyles: boolean = false;
   @State styleSection: string = '';
   @State stylePrefix: string = '';
@@ -1084,15 +1085,20 @@ struct Editor {
     }
   }
 
-  private seekAudio(deltaMs: number): void {
+  private seekAudioTo(ms: number): void {
     if (this.audioPlayer === undefined) {
       return;
     }
-    const target = Math.max(0, Math.min(this.currentMs + deltaMs,
-      this.audioDuration > 0 ? this.audioDuration : this.currentMs + deltaMs));
+    const max = this.audioDuration > 0 ? this.audioDuration : ms;
+    const target = Math.max(0, Math.min(ms, max));
     this.audioPlayer.seek(target);
     this.currentMs = target;
     this.updateActiveText();
+    this.audioStatus = `定位 ${(target / 1000).toFixed(3)}s`;
+  }
+
+  private seekAudio(deltaMs: number): void {
+    this.seekAudioTo(this.currentMs + deltaMs);
   }
 
   private selectActiveEvent(): void {
@@ -1974,33 +1980,69 @@ struct Editor {
           Text(this.audioStatus).fontSize(10).fontColor('#888888').width('100%')
 
           if (this.waveformPeaks.length > 0) {
-            Row({ space: 0 }) {
-              ForEach(this.waveformPeaks, (v: number, i: number) => {
+            Stack({ alignContent: Alignment.TopStart }) {
+              Row({ space: 0 }) {
+                ForEach(this.waveformPeaks, (v: number, i: number) => {
+                  Column()
+                    .layoutWeight(1)
+                    .height(Math.max(1, v * 70))
+                    .backgroundColor('#4263EB')
+                }, (v: number, i: number) => `${i}`)
+              }
+              .width('100%')
+              .height(70)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Bottom)
+
+              if (this.audioDuration > 0 && this.waveformWidth > 0) {
                 Column()
-                  .width(1.5)
-                  .height(Math.max(1, v * 70))
-                  .backgroundColor('#4263EB')
-              }, (v: number, i: number) => `${i}`)
+                  .width(2)
+                  .height(70)
+                  .backgroundColor('#E03131')
+                  .position({
+                    x: Math.min(this.waveformWidth - 2,
+                      Math.max(0, this.currentMs / this.audioDuration * this.waveformWidth)),
+                    y: 0
+                  })
+              }
             }
             .width('100%')
             .height(70)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(VerticalAlign.Bottom)
+            .onAreaChange((oldArea: Area, newArea: Area) => {
+              this.waveformWidth = Number(newArea.width);
+            })
           }
           if (this.waveformStatus !== '') {
             Text(this.waveformStatus).fontSize(9).fontColor('#999999').width('100%')
           }
 
           if (this.audioPath !== '') {
-            Text(`当前 ${(this.currentMs / 1000).toFixed(2)}s / ${(this.audioDuration / 1000).toFixed(2)}s`)
+            Text(`当前 ${(this.currentMs / 1000).toFixed(3)}s / ${(this.audioDuration / 1000).toFixed(2)}s`)
               .fontSize(11).fontColor('#4263EB').width('100%')
-            Row({ space: 6 }) {
-              Button(this.audioPlaying ? '暂停' : '播放').layoutWeight(1).fontSize(11)
+            Slider({
+              value: this.currentMs / 1000,
+              min: 0,
+              max: this.audioDuration > 0 ? this.audioDuration / 1000 : 1,
+              step: 0.001
+            })
+              .width('100%')
+              .enabled(this.audioDuration > 0)
+              .onChange((value: number, mode: SliderChangeMode) => {
+                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
+                  this.seekAudioTo(value * 1000);
+                }
+              })
+            Row({ space: 4 }) {
+              Button(this.audioPlaying ? '暂停' : '播放').layoutWeight(1).fontSize(10)
                 .onClick(() => { this.toggleAudioPlay(); })
-              Button('-1s').layoutWeight(1).fontSize(11)
+              Button('-1s').layoutWeight(1).fontSize(10)
                 .onClick(() => { this.seekAudio(-1000); })
-              Button('+1s').layoutWeight(1).fontSize(11)
+              Button('+1s').layoutWeight(1).fontSize(10)
                 .onClick(() => { this.seekAudio(1000); })
+              Button('-100ms').layoutWeight(1).fontSize(10)
+                .onClick(() => { this.seekAudio(-100); })
+              Button('+100ms').layoutWeight(1).fontSize(10)
+                .onClick(() => { this.seekAudio(100); })
             }
             .width('100%')
 
