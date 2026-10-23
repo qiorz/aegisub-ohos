@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.3';
+const APP_VERSION = '0.2.4';
 
 interface AssEvent {
   kind: string;
@@ -42,6 +42,12 @@ interface VideoProbeResult {
   fps?: number;
   width?: number;
   height?: number;
+  error?: string;
+}
+
+interface VideoWaveformResult {
+  ok: boolean;
+  peaks?: number[];
   error?: string;
 }
 
@@ -164,6 +170,9 @@ struct Editor {
   @State videoDuration: number = 0;
   @State videoFps: number = 25;
   @State videoFpsSource: string = '默认';
+  @State videoWaveformPeaks: number[] = [];
+  @State videoWaveformWidth: number = 0;
+  @State videoWaveformStatus: string = '';
   @State activeText: string = '';
   @State subtitleImage: image.PixelMap | undefined = undefined;
   @State renderStatus: string = '';
@@ -302,6 +311,9 @@ struct Editor {
     this.videoDuration = 0;
     this.pendingSeekMs = -1;
     this.subtitleImage = undefined;
+    this.videoWaveformPeaks = [];
+    this.videoWaveformWidth = 0;
+    this.videoWaveformStatus = '';
     this.showVideo = false;
     this.clearDir(`${this.ctx.filesDir}/video`, []);
     this.refreshCache();
@@ -950,6 +962,23 @@ struct Editor {
         this.videoFpsSource = '未识别，默认';
       }
       this.addLog(`videoFps ${this.videoFps.toFixed(3)} (${this.videoFpsSource})`);
+      this.videoWaveformPeaks = [];
+      this.videoWaveformWidth = 0;
+      this.videoWaveformStatus = '解析视频音轨波形…';
+      try {
+        const waveRaw: string = aegisub.videoWaveform(dest, 200);
+        const wave: VideoWaveformResult = JSON.parse(waveRaw) as VideoWaveformResult;
+        if (wave.ok) {
+          this.videoWaveformPeaks = wave.peaks ?? [];
+          this.videoWaveformStatus = this.videoWaveformPeaks.length > 0
+            ? `视频音轨 ${this.videoWaveformPeaks.length} 段` : '视频没有可显示的音轨';
+        } else {
+          this.videoWaveformStatus = `音轨波形失败：${wave.error ?? 'unknown'}`;
+        }
+      } catch (we) {
+        this.videoWaveformStatus = `音轨波形失败：${JSON.stringify(we)}`;
+      }
+      this.addLog(`videoWaveform ${this.videoWaveformPeaks.length} buckets`);
       try {
         this.videoController.stop();
       } catch (e) {
@@ -2248,6 +2277,44 @@ struct Editor {
             .borderRadius(8)
           }
 
+          if (this.videoWaveformPeaks.length > 0) {
+            Text('视频音轨波形').fontSize(9).fontColor('#888888').width('100%')
+            Stack({ alignContent: Alignment.TopStart }) {
+              Row({ space: 0 }) {
+                ForEach(this.videoWaveformPeaks, (v: number, i: number) => {
+                  Column()
+                    .layoutWeight(1)
+                    .height(Math.max(1, v * 50))
+                    .backgroundColor('#2F9E44')
+                }, (v: number, i: number) => `${i}`)
+              }
+              .width('100%')
+              .height(50)
+              .justifyContent(FlexAlign.Center)
+              .alignItems(VerticalAlign.Bottom)
+
+              if (this.videoDuration > 0 && this.videoWaveformWidth > 0) {
+                Column()
+                  .width(2)
+                  .height(50)
+                  .backgroundColor('#E03131')
+                  .position({
+                    x: Math.min(this.videoWaveformWidth - 2,
+                      Math.max(0, this.currentMs / 1000 / this.videoDuration *
+                        this.videoWaveformWidth)),
+                    y: 0
+                  })
+              }
+            }
+            .width('100%')
+            .height(50)
+            .onAreaChange((oldArea: Area, newArea: Area) => {
+              this.videoWaveformWidth = Number(newArea.width);
+            })
+          }
+          if (this.videoWaveformStatus !== '') {
+            Text(this.videoWaveformStatus).fontSize(9).fontColor('#999999').width('100%')
+          }
           if (this.renderStatus !== '') {
             Text(this.renderStatus).fontSize(9).fontColor('#888888').width('100%')
           }

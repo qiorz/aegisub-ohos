@@ -4,6 +4,7 @@
 #include "ass_render.h"
 #include "waveform.h"
 #include "video_probe.h"
+#include "ffmpeg_waveform.h"
 #include "test_runner.h"
 
 #include <atomic>
@@ -208,6 +209,23 @@ napi_value VideoFps(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value VideoWaveform(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    int32_t buckets = 200;
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "videoWaveform(path: string, buckets?: number)");
+        return nullptr;
+    }
+    if (argc >= 2) napi_get_value_int32(env, args[1], &buckets);
+    std::string out = VideoWaveformJson(path, buckets);
+    napi_value result;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 napi_value Waveform(napi_env env, napi_callback_info info) {
     size_t argc = 2;
     napi_value args[2] = {nullptr};
@@ -295,6 +313,7 @@ napi_value Init(napi_env env, napi_value exports) {
         {"renderAss", nullptr, RenderAss, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"listFonts", nullptr, ListFonts, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"waveform", nullptr, Waveform, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"videoWaveform", nullptr, VideoWaveform, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"videoFps", nullptr, VideoFps, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},

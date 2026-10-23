@@ -43,6 +43,15 @@ export interface VideoProbeResult {
 /** Read MP4/MOV average fps (mdhd/stts); MKV/TS return ok=false. */
 export const videoFps: (path: string) => string;
 
+export interface VideoWaveformResult {
+  ok: boolean;
+  peaks?: number[];
+  error?: string;
+}
+
+/** Decode the first audio stream of a video/audio container into peaks. */
+export const videoWaveform: (path: string, buckets?: number) => string;
+
 /** Compute PCM WAV peak buckets (0..1) for a waveform display. */
 export const waveform: (path: string, buckets?: number) => string;
 

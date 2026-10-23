@@ -4,6 +4,11 @@ project(aegisubtest C CXX)
 set(AEGISUB_SRC "" CACHE PATH "Aegisub v3.5.1 source root")
 set(AEGISUB_PREFIX "" CACHE PATH "OHOS static dependency prefix")
 set(AEGISUB_BUILD "" CACHE PATH "Meson build dir containing libaegisub.a")
+get_filename_component(DEPS_DIR "${AEGISUB_PREFIX}/.." ABSOLUTE)
+set(FFMPEG_MIN "${DEPS_DIR}/ffmpeg-min/install" CACHE PATH "minimal ffmpeg install")
+if(NOT EXISTS "${FFMPEG_MIN}/include/libavformat/avformat.h")
+    message(FATAL_ERROR "missing minimal ffmpeg at ${FFMPEG_MIN}")
+endif()
 
 if(NOT AEGISUB_SRC OR NOT AEGISUB_PREFIX OR NOT AEGISUB_BUILD)
     message(FATAL_ERROR "Pass -DAEGISUB_SRC=... -DAEGISUB_PREFIX=... -DAEGISUB_BUILD=...")
@@ -24,6 +29,7 @@ add_library(aegisubtest SHARED
     ass_render.cpp
     waveform.cpp
     video_probe.cpp
+    ffmpeg_waveform.cpp
     test_runner.cpp
     ${AEGISUB_SRC}/tests/support/util.cpp
     ${TEST_SOURCES})
@@ -34,7 +40,8 @@ target_include_directories(aegisubtest PRIVATE
     ${AEGISUB_SRC}/tests/support
     ${AEGISUB_SRC}/subprojects/iconv/include
     ${AEGISUB_PREFIX}/include
-    ${AEGISUB_PREFIX}/include/luajit-2.1)
+    ${AEGISUB_PREFIX}/include/luajit-2.1
+    ${FFMPEG_MIN}/include)
 
 target_compile_definitions(aegisubtest PRIVATE
     _FILE_OFFSET_BITS=64
@@ -65,6 +72,10 @@ set(AEGISUB_STATIC_LIBS
     ${AEGISUB_PREFIX}/lib/libass.a
     ${AEGISUB_PREFIX}/lib/libfontconfig.a
     ${AEGISUB_PREFIX}/lib/libexpat.a
+    ${FFMPEG_MIN}/lib/libavformat.a
+    ${FFMPEG_MIN}/lib/libavcodec.a
+    ${FFMPEG_MIN}/lib/libswresample.a
+    ${FFMPEG_MIN}/lib/libavutil.a
     ${AEGISUB_PREFIX}/lib/libharfbuzz.a
     ${AEGISUB_PREFIX}/lib/libfribidi.a
     ${AEGISUB_PREFIX}/lib/libfreetype.a
