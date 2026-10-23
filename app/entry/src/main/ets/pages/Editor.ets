@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.15';
+const APP_VERSION = '0.2.16';
 
 interface AssEvent {
   kind: string;
@@ -200,6 +200,9 @@ struct Editor {
   private audioFd: number = -1;
   private audioFile: fs.File | undefined = undefined;
   private sliderActive: boolean = false;
+  private textController: TextAreaController = new TextAreaController();
+  private selStart: number = 0;
+  private selEnd: number = 0;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -1425,6 +1428,8 @@ struct Editor {
       return;
     }
     const e: AssEvent = this.events[this.selected];
+    this.selStart = 0;
+    this.selEnd = 0;
     this.editKind = e.kind;
     this.editStart = this.startIndex >= 0 ? (e.fields[this.startIndex] ?? '') : '';
     this.editEnd = this.endIndex >= 0 ? (e.fields[this.endIndex] ?? '') : '';
@@ -1456,6 +1461,29 @@ struct Editor {
   /** ASS is line-oriented; a real newline in TextArea must become \N. */
   private applyLineTag(open: string, close: string): void {
     const text = this.editText;
+    const start = Math.max(0, Math.min(this.selStart, text.length));
+    const end = Math.max(start, Math.min(this.selEnd, text.length));
+    if (end > start) {
+      const selected = text.substring(start, end);
+      let replacement = open + selected + close;
+      if (selected.startsWith(open) && selected.endsWith(close) &&
+          selected.length >= open.length + close.length) {
+        replacement = selected.substring(open.length, selected.length - close.length);
+      }
+      this.editText = text.substring(0, start) + replacement + text.substring(end);
+      this.selStart = start + open.length;
+      this.selEnd = start + open.length + (replacement.length - open.length - close.length);
+      this.selEnd = Math.max(this.selStart, this.selEnd);
+      setTimeout(() => {
+        try {
+          this.textController.setTextSelection(this.selStart, this.selEnd);
+        } catch (e) {
+          // TextArea not focused
+        }
+      }, 0);
+      this.status = '已给选中文本加标签；点“应用”写入';
+      return;
+    }
     if (text.startsWith(open) && text.endsWith(close) &&
         text.length >= open.length + close.length) {
       this.editText = text.substring(open.length, text.length - close.length);
@@ -1561,6 +1589,8 @@ struct Editor {
     arr[this.selected] = updated;
     this.events = arr;
     this.editKind = newKind;
+    this.selStart = 0;
+    this.selEnd = 0;
     this.status = '已应用到内存；点“保存”写入文件';
   }
 
@@ -2685,12 +2715,18 @@ struct Editor {
           }
           .width('100%')
 
-          TextArea({ text: this.editText })
+          TextArea({ text: this.editText, controller: this.textController })
             .height(64)
             .fontSize(12)
             .width('100%')
             .onChange((v: string) => { this.editText = v; })
+            .onTextSelectionChange((start: number, end: number) => {
+              this.selStart = start;
+              this.selEnd = end;
+            })
 
+          Text('选中文本后加标签；未选中时作用于整行')
+            .fontSize(8).fontColor('#999999').width('100%')
           Row({ space: 2 }) {
             Button('粗').layoutWeight(1).height(24).fontSize(9).padding(0)
               .onClick(() => { this.applyLineTag('{\\b1}', '{\\b0}'); })
