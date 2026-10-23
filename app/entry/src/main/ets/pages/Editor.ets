@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.10';
+const APP_VERSION = '0.2.11';
 
 interface AssEvent {
   kind: string;
@@ -197,6 +197,7 @@ struct Editor {
   private pendingSeekMs: number = -1;
   private audioPlayer: media.AVPlayer | undefined = undefined;
   private audioFd: number = -1;
+  private audioFile: fs.File | undefined = undefined;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -1047,7 +1048,15 @@ struct Editor {
   }
 
   private closeAudioFd(): void {
-    if (this.audioFd >= 0) {
+    if (this.audioFile !== undefined) {
+      try {
+        fs.closeSync(this.audioFile);
+      } catch (e) {
+        // already closed
+      }
+      this.audioFile = undefined;
+      this.audioFd = -1;
+    } else if (this.audioFd >= 0) {
       try {
         fs.closeSync(this.audioFd);
       } catch (e) {
@@ -1139,6 +1148,7 @@ struct Editor {
       this.copyTo(uris[0], dest);
       this.parseWaveform(dest, name);
       const afd = fs.openSync(dest, fs.OpenMode.READ_ONLY);
+      this.audioFile = afd;
       this.audioFd = afd.fd;
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
