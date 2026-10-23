@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.6';
+const APP_VERSION = '0.2.7';
 
 interface AssEvent {
   kind: string;
@@ -1015,6 +1015,33 @@ struct Editor {
     }
   }
 
+  private waitForAudioInitialized(player: media.AVPlayer): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          reject(new Error('audio initialized timeout'));
+        }
+      }, 5000);
+      player.on('stateChange', (state: media.AVPlayerState) => {
+        this.addLog(`audio state ${state}`);
+        if (done) {
+          return;
+        }
+        if (state === 'initialized') {
+          done = true;
+          clearTimeout(timer);
+          resolve();
+        } else if (state === 'error') {
+          done = true;
+          clearTimeout(timer);
+          reject(new Error('audio player state error'));
+        }
+      });
+    });
+  }
+
   private closeAudioFd(): void {
     if (this.audioFd >= 0) {
       try {
@@ -1111,12 +1138,6 @@ struct Editor {
       this.audioFd = afd.fd;
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
-      const src: media.AVFileDescriptor = {
-        fd: afd.fd,
-        offset: 0,
-        length: fs.statSync(dest).size
-      };
-      player.fdSrc = src;
       player.on('timeUpdate', (time: number) => {
         this.currentMs = time;
         this.updateActiveText();
@@ -1132,7 +1153,16 @@ struct Editor {
       });
       player.on('error', (err: BusinessError) => {
         this.audioStatus = `音频错误 ${err.code}`;
+        this.addLog(`audio player error ${err.code}`);
       });
+      const ready = this.waitForAudioInitialized(player);
+      const src: media.AVFileDescriptor = {
+        fd: afd.fd,
+        offset: 0,
+        length: fs.statSync(dest).size
+      };
+      player.fdSrc = src;
+      await ready;
       await player.prepare();
       this.audioPath = dest;
       this.audioName = name;
