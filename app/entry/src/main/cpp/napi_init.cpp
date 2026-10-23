@@ -23,6 +23,74 @@ struct WorkData {
     napi_deferred deferred = nullptr;
 };
 
+struct WaveformWorkData {
+    std::string path;
+    int32_t buckets = 200;
+    bool video = false;
+    std::string result;
+    napi_async_work work = nullptr;
+    napi_deferred deferred = nullptr;
+};
+
+void WaveformExecute(napi_env /*env*/, void* data) {
+    auto* w = static_cast<WaveformWorkData*>(data);
+    try {
+        w->result = w->video ? VideoWaveformJson(w->path, w->buckets)
+                             : WaveformJson(w->path, w->buckets);
+    } catch (const std::exception& e) {
+        w->result = std::string("{\"ok\":false,\"error\":\"exception: ") + e.what() + "\"}";
+    } catch (...) {
+        w->result = "{\"ok\":false,\"error\":\"unknown exception\"}";
+    }
+}
+
+void WaveformComplete(napi_env env, napi_status status, void* data) {
+    auto* w = static_cast<WaveformWorkData*>(data);
+    napi_value result;
+    napi_create_string_utf8(env, w->result.c_str(), NAPI_AUTO_LENGTH, &result);
+    if (status == napi_ok)
+        napi_resolve_deferred(env, w->deferred, result);
+    else
+        napi_reject_deferred(env, w->deferred, result);
+    napi_delete_async_work(env, w->work);
+    delete w;
+}
+
+napi_value StartWaveformWork(napi_env env, const char* path, int32_t buckets, bool video) {
+    napi_value promise;
+    napi_deferred deferred;
+    if (napi_create_promise(env, &deferred, &promise) != napi_ok) {
+        napi_throw_error(env, nullptr, "failed to create waveform promise");
+        return nullptr;
+    }
+    auto* w = new WaveformWorkData;
+    w->path = path;
+    w->buckets = buckets;
+    w->video = video;
+    w->deferred = deferred;
+
+    napi_value resource_name;
+    napi_create_string_utf8(env, video ? "video-waveform" : "waveform", NAPI_AUTO_LENGTH, &resource_name);
+    if (napi_create_async_work(env, nullptr, resource_name, WaveformExecute, WaveformComplete,
+                               w, &w->work) != napi_ok) {
+        napi_value msg;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"create async work failed\"}",
+                                NAPI_AUTO_LENGTH, &msg);
+        napi_reject_deferred(env, deferred, msg);
+        delete w;
+        return promise;
+    }
+    if (napi_queue_async_work(env, w->work) != napi_ok) {
+        napi_value msg;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"queue async work failed\"}",
+                                NAPI_AUTO_LENGTH, &msg);
+        napi_reject_deferred(env, deferred, msg);
+        napi_delete_async_work(env, w->work);
+        delete w;
+    }
+    return promise;
+}
+
 std::string busy_json() {
     return "{\"ok\":false,\"error\":\"a test run is already in progress\"}";
 }
@@ -243,6 +311,34 @@ napi_value Waveform(napi_env env, napi_callback_info info) {
     return result;
 }
 
+napi_value WaveformAsync(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    int32_t buckets = 200;
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "waveformAsync(path: string, buckets?: number)");
+        return nullptr;
+    }
+    if (argc >= 2) napi_get_value_int32(env, args[1], &buckets);
+    return StartWaveformWork(env, path, buckets, false);
+}
+
+napi_value VideoWaveformAsync(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    char path[1024] = {0};
+    int32_t buckets = 200;
+    if (argc < 1 || napi_get_value_string_utf8(env, args[0], path, sizeof path, nullptr) != napi_ok) {
+        napi_throw_type_error(env, nullptr, "videoWaveformAsync(path: string, buckets?: number)");
+        return nullptr;
+    }
+    if (argc >= 2) napi_get_value_int32(env, args[1], &buckets);
+    return StartWaveformWork(env, path, buckets, true);
+}
+
 napi_value ListFonts(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -314,6 +410,8 @@ napi_value Init(napi_env env, napi_value exports) {
         {"listFonts", nullptr, ListFonts, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"waveform", nullptr, Waveform, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"videoWaveform", nullptr, VideoWaveform, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"waveformAsync", nullptr, WaveformAsync, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"videoWaveformAsync", nullptr, VideoWaveformAsync, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"videoFps", nullptr, VideoFps, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"normalizeTime", nullptr, NormalizeTime, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, Version, nullptr, nullptr, nullptr, napi_default, nullptr},

@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.example.aegisubtest",
     "vendor": "example",
-    "versionCode": 1000032,
-    "versionName": "0.2.22",
+    "versionCode": 1000033,
+    "versionName": "0.2.23",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }

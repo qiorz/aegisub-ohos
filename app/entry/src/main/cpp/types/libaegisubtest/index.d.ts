@@ -55,6 +55,12 @@ export const videoWaveform: (path: string, buckets?: number) => string;
 /** Compute PCM WAV peak buckets (0..1) for a waveform display. */
 export const waveform: (path: string, buckets?: number) => string;
 
+/** Async version of waveform(); runs on the NAPI worker pool. */
+export const waveformAsync: (path: string, buckets?: number) => Promise<string>;
+
+/** Async version of videoWaveform(); runs on the NAPI worker pool. */
+export const videoWaveformAsync: (path: string, buckets?: number) => Promise<string>;
+
 /** Enumerate font families via fontconfig. */
 export const listFonts: (fontConfigPath: string) => string;
 

@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.22';
+const APP_VERSION = '0.2.23';
 
 interface AssEvent {
   kind: string;
@@ -227,6 +227,8 @@ struct Editor {
   private selEnd: number = 0;
   private suppressTextChange: boolean = false;
   private editRow: number = -1;
+  private waveformRequest: number = 0;
+  private videoWaveformRequest: number = 0;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -344,6 +346,7 @@ struct Editor {
     this.videoDuration = 0;
     this.pendingSeekMs = -1;
     this.subtitleImage = undefined;
+    this.videoWaveformRequest++;
     this.videoWaveformPeaks = [];
     this.videoWaveformWidth = 0;
     this.videoWaveformStatus = '';
@@ -354,6 +357,7 @@ struct Editor {
   }
 
   private clearAudioCache(): void {
+    this.waveformRequest++;
     if (this.audioPlayer !== undefined) {
       const player = this.audioPlayer;
       this.audioPlayer = undefined;
@@ -1096,21 +1100,7 @@ struct Editor {
       this.videoWaveformPeaks = [];
       this.videoWaveformWidth = 0;
       this.videoWaveformZoom = 1;
-      this.videoWaveformStatus = '解析视频音轨波形…';
-      try {
-        const waveRaw: string = aegisub.videoWaveform(dest, 2000);
-        const wave: VideoWaveformResult = JSON.parse(waveRaw) as VideoWaveformResult;
-        if (wave.ok) {
-          this.videoWaveformPeaks = wave.peaks ?? [];
-          this.videoWaveformStatus = this.videoWaveformPeaks.length > 0
-            ? `视频音轨 ${this.videoWaveformPeaks.length} 段` : '视频没有可显示的音轨';
-        } else {
-          this.videoWaveformStatus = `音轨波形失败：${wave.error ?? 'unknown'}`;
-        }
-      } catch (we) {
-        this.videoWaveformStatus = `音轨波形失败：${JSON.stringify(we)}`;
-      }
-      this.addLog(`videoWaveform ${this.videoWaveformPeaks.length} buckets`);
+      this.parseVideoWaveform(dest);
       try {
         this.videoController.stop();
       } catch (e) {
@@ -1265,13 +1255,42 @@ struct Editor {
     return this.waveformBars(this.videoWaveformPeaks, this.videoWaveformView());
   }
 
-  private parseWaveform(path: string, name: string): void {
+  private async parseVideoWaveform(path: string): Promise<void> {
+    const req = ++this.videoWaveformRequest;
+    this.videoWaveformStatus = '正在解析视频音轨波形…';
+    try {
+      const raw: string = await aegisub.videoWaveformAsync(path, 2000);
+      if (req !== this.videoWaveformRequest) {
+        return;
+      }
+      const wave: VideoWaveformResult = JSON.parse(raw) as VideoWaveformResult;
+      if (wave.ok) {
+        this.videoWaveformPeaks = wave.peaks ?? [];
+        this.videoWaveformStatus = this.videoWaveformPeaks.length > 0
+          ? `视频音轨 ${this.videoWaveformPeaks.length} 段` : '视频没有可显示的音轨';
+      } else {
+        this.videoWaveformStatus = `音轨波形失败：${wave.error ?? 'unknown'}`;
+      }
+      this.addLog(`videoWaveform ${this.videoWaveformPeaks.length} buckets`);
+    } catch (we) {
+      if (req === this.videoWaveformRequest) {
+        this.videoWaveformStatus = `音轨波形失败：${JSON.stringify(we)}`;
+      }
+    }
+  }
+
+  private async parseWaveform(path: string, name: string): Promise<void> {
+    const req = ++this.waveformRequest;
     this.waveformPeaks = [];
-    this.waveformStatus = '';
+    this.waveformStatus = '正在解析音频波形…';
+    this.waveformZoom = 1;
     try {
       const raw: string = name.toLowerCase().endsWith('.wav')
-        ? aegisub.waveform(path, 2000)
-        : aegisub.videoWaveform(path, 2000);
+        ? await aegisub.waveformAsync(path, 2000)
+        : await aegisub.videoWaveformAsync(path, 2000);
+      if (req !== this.waveformRequest) {
+        return;
+      }
       const result: WaveformResult = JSON.parse(raw) as WaveformResult;
       if (result.ok) {
         this.waveformPeaks = result.peaks ?? [];
@@ -1280,7 +1299,9 @@ struct Editor {
         this.waveformStatus = `波形解析失败：${result.error ?? 'unknown'}`;
       }
     } catch (we) {
-      this.waveformStatus = `波形解析失败：${JSON.stringify(we)}`;
+      if (req === this.waveformRequest) {
+        this.waveformStatus = `波形解析失败：${JSON.stringify(we)}`;
+      }
     }
   }
 
