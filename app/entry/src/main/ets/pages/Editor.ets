@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.2.3';
 
 interface AssEvent {
   kind: string;
@@ -981,11 +981,48 @@ struct Editor {
     }
   }
 
+  private parseWaveform(path: string, name: string): void {
+    this.waveformPeaks = [];
+    this.waveformStatus = '';
+    if (!name.toLowerCase().endsWith('.wav')) {
+      this.waveformStatus = '波形仅支持 WAV；MP3/AAC/FLAC/OGG 仍可播放/打轴';
+      return;
+    }
+    try {
+      const raw: string = aegisub.waveform(path, 200);
+      const result: WaveformResult = JSON.parse(raw) as WaveformResult;
+      if (result.ok) {
+        this.waveformPeaks = result.peaks ?? [];
+        this.waveformStatus = `WAV 波形 ${this.waveformPeaks.length} 段`;
+      } else {
+        this.waveformStatus = `波形解析失败：${result.error ?? 'unknown'}`;
+      }
+    } catch (we) {
+      this.waveformStatus = `波形解析失败：${JSON.stringify(we)}`;
+    }
+  }
+
+  private reloadWaveform(): void {
+    if (this.audioPath === '') {
+      return;
+    }
+    this.parseWaveform(this.audioPath, this.audioName);
+  }
+
   async pickAudio(): Promise<void> {
+    await this.pickAudioFile(false);
+  }
+
+  async pickAudioWav(): Promise<void> {
+    await this.pickAudioFile(true);
+  }
+
+  private async pickAudioFile(wavOnly: boolean): Promise<void> {
     try {
       const opt = new picker.DocumentSelectOptions();
       opt.maxSelectNumber = 1;
-      opt.fileSuffixFilters = ['.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg'];
+      opt.fileSuffixFilters = wavOnly
+        ? ['.wav'] : ['.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg'];
       const doc = new picker.DocumentViewPicker(this.ctx);
       const uris = await doc.select(opt);
       if (!uris || uris.length === 0) {
@@ -1020,24 +1057,7 @@ struct Editor {
       this.audioDuration = 0;
       this.clearDir(dir, []);
       this.copyTo(uris[0], dest);
-      this.waveformPeaks = [];
-      this.waveformStatus = '';
-      if (name.toLowerCase().endsWith('.wav')) {
-        try {
-          const raw: string = aegisub.waveform(dest, 200);
-          const result: WaveformResult = JSON.parse(raw) as WaveformResult;
-          if (result.ok) {
-            this.waveformPeaks = result.peaks ?? [];
-            this.waveformStatus = `波形 ${this.waveformPeaks.length} 段`;
-          } else {
-            this.waveformStatus = `波形解析失败：${result.error ?? 'unknown'}`;
-          }
-        } catch (we) {
-          this.waveformStatus = `波形解析失败：${JSON.stringify(we)}`;
-        }
-      } else {
-        this.waveformStatus = '波形仅支持 WAV；当前格式仍可播放/打轴';
-      }
+      this.parseWaveform(dest, name);
       const player = await media.createAVPlayer();
       this.audioPlayer = player;
       player.url = fileUri.getUriFromPath(dest);
@@ -1060,7 +1080,7 @@ struct Editor {
       await player.prepare();
       this.audioPath = dest;
       this.audioName = name;
-      this.audioStatus = '已加载；播放或用 ±1s 定位';
+      this.audioStatus = '已加载；Slider / ±1s / ±100ms 定位';
       this.currentMs = 0;
       this.audioDuration = 0;
       this.addLog(`pickAudio ${name}, waveform ${this.waveformPeaks.length} buckets`);
@@ -1971,6 +1991,8 @@ struct Editor {
           Row({ space: 6 }) {
             Button('选择音频').fontSize(11)
               .onClick(() => { this.pickAudio(); })
+            Button('WAV 波形').fontSize(10)
+              .onClick(() => { this.pickAudioWav(); })
             Text(this.audioName === '' ? '未选择音频' : this.audioName)
               .fontSize(10).fontColor('#666666').layoutWeight(1)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1978,6 +2000,13 @@ struct Editor {
           .width('100%')
 
           Text(this.audioStatus).fontSize(10).fontColor('#888888').width('100%')
+          Text('WAV 显示柱状波形；MP3/AAC/FLAC/OGG 只播放不打波形')
+            .fontSize(9).fontColor('#999999').width('100%')
+          if (this.audioPath !== '' && this.audioName.toLowerCase().endsWith('.wav') &&
+              this.waveformPeaks.length === 0) {
+            Button('重载波形').fontSize(10)
+              .onClick(() => { this.reloadWaveform(); })
+          }
 
           if (this.waveformPeaks.length > 0) {
             Stack({ alignContent: Alignment.TopStart }) {
