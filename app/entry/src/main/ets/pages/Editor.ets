@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.11';
+const APP_VERSION = '0.2.12';
 
 interface AssEvent {
   kind: string;
@@ -198,6 +198,7 @@ struct Editor {
   private audioPlayer: media.AVPlayer | undefined = undefined;
   private audioFd: number = -1;
   private audioFile: fs.File | undefined = undefined;
+  private sliderActive: boolean = false;
   private renderBusy: boolean = false;
   private lastAutoRender: number = 0;
 
@@ -2157,8 +2158,16 @@ struct Editor {
               .width('100%')
               .enabled(this.audioDuration > 0)
               .onChange((value: number, mode: SliderChangeMode) => {
-                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-                  this.seekAudioTo(value * 1000);
+                if (mode === SliderChangeMode.Begin) {
+                  this.sliderActive = true;
+                  return;
+                }
+                if (mode === SliderChangeMode.End) {
+                  if (this.sliderActive) {
+                    this.sliderActive = false;
+                    this.addLog(`audio slider seek ${(value * 1000).toFixed(0)}ms`);
+                    this.seekAudioTo(value * 1000);
+                  }
                 }
               })
             Row({ space: 4 }) {
