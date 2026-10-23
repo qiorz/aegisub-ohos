@@ -16,7 +16,7 @@ import { util } from '@kit.ArkTS';
 import aegisub from 'libaegisubtest.so';
 
 const TAG = 'AegisubEditor';
-const APP_VERSION = '0.2.13';
+const APP_VERSION = '0.2.14';
 
 interface AssEvent {
   kind: string;
@@ -132,6 +132,7 @@ struct Editor {
   @State cacheAss: number = 0;
   @State cacheLogs: number = 0;
   @State cacheFonts: number = 0;
+  @State cacheImportedFonts: number = 0;
   @State cacheTemp: number = 0;
   @State cacheStatus: string = '';
   @State audioName: string = '';
@@ -286,11 +287,12 @@ struct Editor {
     this.cacheAss = this.dirSize(`${this.ctx.filesDir}/ass`);
     this.cacheLogs = this.dirSize(`${this.ctx.filesDir}/logs`);
     this.cacheFonts = this.dirSize(`${this.ctx.cacheDir}/aegisub-fonts`);
+    this.cacheImportedFonts = this.dirSize(`${this.ctx.filesDir}/fonts`);
     this.cacheTemp = this.dirSize(`${this.ctx.cacheDir}/fc-cache-v012`) +
       this.dirSize(`${this.ctx.cacheDir}/fc-cache`) +
       this.dirSize(`${this.ctx.cacheDir}/aegisub-tests`);
     this.cacheTotal = this.cacheVideo + this.cacheAudio + this.cacheAss +
-      this.cacheLogs + this.cacheFonts + this.cacheTemp;
+      this.cacheLogs + this.cacheFonts + this.cacheImportedFonts + this.cacheTemp;
   }
 
   private openCache(): void {
@@ -373,6 +375,13 @@ struct Editor {
     this.cacheStatus = '已清理字体，下次渲染会重新解压';
   }
 
+  private clearImportedFonts(): void {
+    this.clearDir(`${this.ctx.filesDir}/fonts`, []);
+    this.resetFontConfig();
+    this.refreshCache();
+    this.cacheStatus = '已清理导入字体';
+  }
+
   private clearTempCache(): void {
     this.clearDir(`${this.ctx.cacheDir}/aegisub-tests`, []);
     this.clearDir(`${this.ctx.cacheDir}/fc-cache-v012`, []);
@@ -393,6 +402,7 @@ struct Editor {
     this.clearAssCache();
     this.clearLogCache();
     this.clearFontCache();
+    this.clearImportedFonts();
     this.clearTempCache();
     this.refreshCache();
     this.cacheStatus = '已清理全部缓存（当前字幕保留）';
@@ -595,6 +605,58 @@ struct Editor {
     this.editOutlineWidth = this.styleField('Outline') >= 0
       ? (f[this.styleField('Outline')] ?? '2') : '2';
     this.fontSelected = this.systemFonts.indexOf(this.editFont);
+  }
+
+  private resetFontConfig(): void {
+    this.fontConfigPath = '';
+    this.clearDir(`${this.ctx.cacheDir}/fc-cache-v012`, []);
+    try {
+      fs.mkdirSync(`${this.ctx.cacheDir}/fc-cache-v012`, true);
+    } catch (e) {
+      // exists
+    }
+    try {
+      fs.mkdirSync(`${this.ctx.filesDir}/fonts`, true);
+    } catch (e) {
+      // exists
+    }
+  }
+
+  async importFont(): Promise<void> {
+    try {
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['.ttf', '.otf', '.ttc'];
+      const doc = new picker.DocumentViewPicker(this.ctx);
+      const uris = await doc.select(opt);
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      let name = uris[0].substring(uris[0].lastIndexOf('/') + 1);
+      try {
+        name = decodeURIComponent(name);
+      } catch (e) {
+        // keep raw
+      }
+      const dir = `${this.ctx.filesDir}/fonts`;
+      try {
+        fs.mkdirSync(dir, true);
+      } catch (e) {
+        // exists
+      }
+      const safe = name.replace(/[^A-Za-z0-9._-]/g, '_');
+      const dest = `${dir}/${stamp()}-${safe}`;
+      this.copyTo(uris[0], dest);
+      this.resetFontConfig();
+      this.status = `已导入字体 ${name}`;
+      this.addLog(`importFont ${name} -> ${dest}`);
+      this.loadFonts();
+      this.fontListStatus = `已导入 ${name}，请在下拉中选择`;
+      this.refreshCache();
+    } catch (e) {
+      this.status = `导入字体失败：${JSON.stringify(e)}`;
+      this.addLog(`importFont failed: ${JSON.stringify(e)}`);
+    }
   }
 
   private loadFonts(): void {
@@ -854,10 +916,17 @@ struct Editor {
       } catch (e) {
         // exists
       }
+      const userFonts = `${this.ctx.filesDir}/fonts`;
+      try {
+        fs.mkdirSync(userFonts, true);
+      } catch (e) {
+        // exists
+      }
       const xml = '<?xml version="1.0"?>\n' +
         '<fontconfig>\n' +
         '  <dir>/system/fonts</dir>\n' +
         `  <dir>${dir}</dir>\n` +
+        `  <dir>${userFonts}</dir>\n` +
         `  <cachedir>${cache}</cachedir>\n` +
         '</fontconfig>\n';
       this.writeText(path, xml);
@@ -2073,6 +2142,14 @@ struct Editor {
           .width('100%')
 
           Row({ space: 6 }) {
+            Text('导入字体').fontSize(10).layoutWeight(1)
+            Text(this.sizeText(this.cacheImportedFonts)).fontSize(10).fontColor('#666666')
+            Button('清理').fontSize(9).height(24).padding(0)
+              .onClick(() => { this.clearImportedFonts(); })
+          }
+          .width('100%')
+
+          Row({ space: 6 }) {
             Text('测试/索引缓存').fontSize(10).layoutWeight(1)
             Text(this.sizeText(this.cacheTemp)).fontSize(10).fontColor('#666666')
             Button('清理').fontSize(9).height(24).padding(0)
@@ -2446,8 +2523,10 @@ struct Editor {
                 TextInput({ text: this.editFont })
                   .layoutWeight(1).fontSize(11)
                   .onChange((v: string) => { this.editFont = v; })
-                Button('系统字体').fontSize(10)
+                Button('系统字体').fontSize(9)
                   .onClick(() => { this.loadFonts(); })
+                Button('导入字体').fontSize(9)
+                  .onClick(() => { this.importFont(); })
               }
               .width('100%')
 
